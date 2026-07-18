@@ -5,17 +5,17 @@ export default ({ config }) => {
   const envConfig = {
     development: {
       name: "Samadhan (Dev)",
-      apiUrl: "http://192.168.1.5:8000",
+      apiUrl: "https://samadhan-api.fab5connect.com/api",
       androidPackage: "com.harshjha047.samadhan.dev",
     },
     staging: {
       name: "Samadhan (Staging)",
-      apiUrl: "https://staging-api.samadhan.example.com",
+      apiUrl: "https://samadhan-api.fab5connect.com/api",
       androidPackage: "com.harshjha047.samadhan.staging",
     },
     production: {
       name: "Samadhan",
-      apiUrl: "https://api.samadhan.example.com",
+      apiUrl: "https://samadhan-api.fab5connect.com/api",
       androidPackage: "com.harshjha047.samadhan",
     },
   }[env];
@@ -28,8 +28,14 @@ export default ({ config }) => {
       package: envConfig.androidPackage,
     },
     ios: {
-      bundleIdentifier: envConfig.androidPackage, // reuse same string for iOS
+      bundleIdentifier: envConfig.androidPackage,
     },
+    plugins: [
+      "expo-router",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-web-browser",
+    ],
     extra: {
       apiUrl: envConfig.apiUrl,
       eas: {
