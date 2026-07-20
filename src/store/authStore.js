@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import { authService } from '../api/authService';
 import { storage } from '../utils/storage';
+import { userService } from '../api/userService';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
   isInitializing: true,
+  setUser: (user) => set({ user }),
 
   hydrate: async () => {
     try {
@@ -24,7 +26,6 @@ export const useAuthStore = create((set, get) => ({
         if (error?.status === 401) {
           await get().clearAuth();
         } else if (__DEV__) {
-          console.warn('[AuthStore] getMe() failed on hydrate (likely offline). Keeping local session.');
         }
       }
     } finally {
@@ -42,20 +43,19 @@ export const useAuthStore = create((set, get) => ({
       }
       set({ user: userPayload, isAuthenticated: true });
     } catch (error) {
-      console.error('[AuthStore] Failed to save auth session', error);
       throw error;
     }
   },
 
-  logout: async () => {
-    try {
-      await authService.logout().catch(() =>
-        console.warn('[AuthStore] Server logout failed, proceeding locally.')
-      );
-    } finally {
-      await get().clearAuth();
-    }
-  },
+logout: async () => {
+  try {
+    await userService.removePushToken().catch(() => {});
+    await authService.logout()
+  } finally {
+    await get().clearAuth();
+  }
+},
+
 
   clearAuth: async () => {
     await storage.deleteItemAsync('auth_token');

@@ -68,8 +68,8 @@ export default function AgentDashboard() {
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3b82f6" />}
     >
       {/* Header Section */}
-      <View className="flex-row justify-between items-center mb-8 mt-2">
-        <View>
+      <View className="flex-row justify-between items-center mb-8 mt-9">
+        <View className=''>
           <Text className="text-3xl font-extrabold text-gray-900 tracking-tight">Workspace</Text>
           <Text className="text-gray-500 font-medium mt-1">
             Hello, {user?.name?.split(' ')[0] || 'Agent'}

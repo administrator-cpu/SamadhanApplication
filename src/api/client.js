@@ -25,7 +25,7 @@ function onRefreshed(newToken) {
     refreshSubscribers = [];
 }
 
-let onSessionExpired = () => {};
+let onSessionExpired = () => { };
 export function setOnSessionExpired(callback) {
     onSessionExpired = callback;
 }
@@ -38,9 +38,7 @@ apiClient.interceptors.request.use(
                 config.headers.Authorization = `Bearer ${token}`;
             }
         } catch (error) {
-            if (__DEV__) {
-                console.error('[API Request Error] Failed to retrieve token:', error);
-            }
+           
         }
         return config;
     },
@@ -55,10 +53,12 @@ apiClient.interceptors.response.use(
         if (error.response) {
             if (error.response.status === 401 && !originalRequest._retry) {
 
-                if (originalRequest.url?.includes('/refresh')) {
-                    await clearSession();
-                    onSessionExpired();
-                    return Promise.reject({ status: 401, message: 'Session expired. Please log in again.' });
+                if (originalRequest.url?.includes('/refresh') || originalRequest.url?.includes('/login')) {
+                    return Promise.reject({
+                        status: error.response.status,
+                        message: error.response.data?.message || 'Invalid email or password.',
+                        data: error.response.data,
+                    });
                 }
 
                 originalRequest._retry = true;
@@ -108,9 +108,6 @@ apiClient.interceptors.response.use(
                     isRefreshing = false;
                     onRefreshed(null);
 
-                    if (__DEV__) {
-                        console.warn('[API Auth Error] Refresh failed. Clearing session.');
-                    }
 
                     await clearSession();
                     onSessionExpired();

@@ -1,9 +1,6 @@
-import { View, Text } from 'react-native';
+// app/(sales)/raise-ticket.js
+import RaiseTicketForm from '../../src/components/RaiseTicketForm';
 
 export default function SalesRaiseTicket() {
-  return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text>Raise Ticket for Customer (WIP)</Text>
-    </View>
-  );
+  return <RaiseTicketForm role="SALES" listPath="/(sales)/tickets" />;
 }

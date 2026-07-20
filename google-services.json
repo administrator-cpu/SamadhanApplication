@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "89999316538",
+    "project_id": "samadhan-notification",
+    "storage_bucket": "samadhan-notification.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:89999316538:android:50554dc8fae99c14ab0703",
+        "android_client_info": {
+          "package_name": "com.harshjha047.samadhan.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyACCq3KmdiHYjzPLiM1IoOhMv_APNqwpts"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

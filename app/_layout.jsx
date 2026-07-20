@@ -1,14 +1,23 @@
 // app/_layout.jsx
 import { useEffect } from 'react';
+import { View, Text, ActivityIndicator, LogBox } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/authStore';
 import { setOnSessionExpired } from '../src/api/client';
 import { queryClient } from '../src/api/queryClient';
+import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import '../global.css';
-import { LogBox } from 'react-native';
+import OfflineBanner from '../src/components/OfflineBanner';
 
+LogBox.ignoreLogs([
+  "Can't perform a React state update on a component that hasn't mounted yet",
+]);
+
+// Keep splash screen visible only until our React component mounts
 SplashScreen.preventAutoHideAsync();
 
 const ROLE_HOME_ROUTES = {
@@ -20,12 +29,30 @@ const ROLE_HOME_ROUTES = {
 
 const ROLE_GROUPS = ['(customer)', '(agent)', '(admin)', '(sales)'];
 
+// --- PREMIUM LOADING UI ---
+// This replaces the boring 'return null' with an eye-candy loading state
+function InitializingScreen() {
+  return (
+    <View className="flex-1 bg-slate-900 justify-center items-center">
+      <StatusBar style="light" />
+      {/* Immersive background glow */}
+      <View className="absolute w-72 h-72 bg-blue-600 rounded-full opacity-20 blur-3xl" />
+      
+      {/* App Icon / Branding */}
+      <View className="w-20 h-20 bg-blue-600 rounded-[24px] items-center justify-center mb-8 shadow-2xl shadow-blue-600/50">
+        <Feather name="wifi" size={40} color="#ffffff" />
+      </View>
+      
+      <ActivityIndicator size="large" color="#3b82f6" className="mb-4" />
+      <Text className="text-slate-400 font-bold tracking-widest uppercase text-xs">
+        Securing Connection...
+      </Text>
+    </View>
+  );
+}
+
 function RootLayoutNav() {
-  const isInitializing = useAuthStore((state) => state.isInitializing);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
-  const hydrate = useAuthStore((state) => state.hydrate);
-  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const { isInitializing, isAuthenticated, user, hydrate, clearAuth } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
 
@@ -34,61 +61,84 @@ function RootLayoutNav() {
       clearAuth();
       router.replace('/(auth)/login');
     });
-  }, []);
+  }, [clearAuth, router]);
+  usePushNotifications();
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
+  // Hide the static native splash screen as soon as this component mounts.
+  // This allows our beautiful `InitializingScreen` to take over smoothly.
   useEffect(() => {
-    if (isInitializing) return;
+    SplashScreen.hideAsync();
+  }, []);
 
-    const currentGroup = segments[0];
-    const inAuthGroup = currentGroup === '(auth)';
-    const inRoleGroup = ROLE_GROUPS.includes(currentGroup);
-    const homeRoute = ROLE_HOME_ROUTES[user?.role];
+useEffect(() => {
+  if (isInitializing) return;
 
-    if (!isAuthenticated) {
-      if (!inAuthGroup) router.replace('/(auth)/login');
-      return;
-    }
+  const currentGroup = segments[0];
+  const inAuthGroup = currentGroup === '(auth)';
+  const inForcedChangeScreen = currentGroup === '(auth)' && segments[1] === 'force-password-change';
+  const inRoleGroup = ROLE_GROUPS.includes(currentGroup);
+  const homeRoute = ROLE_HOME_ROUTES[user?.role];
 
-    if (!homeRoute) {
-      console.error('[Router Guard] Unknown role:', user?.role);
-      return;
-    }
+  if (!isAuthenticated) {
+    if (!inAuthGroup) router.replace('/(auth)/login');
+    return;
+  }
 
-    if (inAuthGroup) {
-      router.replace(homeRoute);
-      return;
-    }
+  if (!homeRoute) {
+    return;
+  }
 
-    if (inRoleGroup && `(${currentGroup.slice(1, -1)})` !== homeRoute.slice(1)) {
-      router.replace(homeRoute);
-    }
-  }, [isAuthenticated, isInitializing, segments, user?.role]);
+  // Forced password change takes priority over everything else once logged in.
+  if (user?.must_change_password && !inForcedChangeScreen) {
+    router.replace('/(auth)/force-password-change');
+    return;
+  }
 
-  useEffect(() => {
-    if (!isInitializing) SplashScreen.hideAsync();
-  }, [isInitializing]);
+  if (!user?.must_change_password && inForcedChangeScreen) {
+    router.replace(homeRoute);
+    return;
+  }
 
-  if (isInitializing) return null;
+  if (inAuthGroup && !inForcedChangeScreen) {
+    router.replace(homeRoute);
+    return;
+  }
 
-  LogBox.ignoreLogs([
-  "Can't perform a React state update on a component that hasn't mounted yet",
-]);
+  if (inRoleGroup && `(${currentGroup.slice(1, -1)})` !== homeRoute.slice(1)) {
+    router.replace(homeRoute);
+  }
+}, [isAuthenticated, isInitializing, segments, user?.role, user?.must_change_password]);
+
+  // Render our premium loading screen instead of an empty screen
+  if (isInitializing) {
+    return <InitializingScreen />;
+  }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen
-        name="(auth)"
-        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-      />
-      <Stack.Screen name="(customer)" />
-      <Stack.Screen name="(agent)" />
-      <Stack.Screen name="(admin)" />
-      <Stack.Screen name="(sales)" />
-    </Stack>
+    <>
+      <StatusBar style="auto" />
+       <OfflineBanner />
+      <Stack 
+        screenOptions={{ 
+          headerShown: false,
+          animation: 'fade_from_bottom', 
+          contentStyle: { backgroundColor: '#0f172a' } 
+        }}
+      >
+        <Stack.Screen
+          name="(auth)"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen name="(customer)" />
+        <Stack.Screen name="(agent)" />
+        <Stack.Screen name="(admin)" />
+        <Stack.Screen name="(sales)" />
+      </Stack>
+    </>
   );
 }
 

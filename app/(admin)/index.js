@@ -7,6 +7,7 @@ import { useAdminStats } from '../../src/hooks/useAdminStats';
 
 export default function AdminDashboard() {
   const user = useAuthStore((state) => state.user);
+
   const { data: stats, isLoading, isError, error, refetch, isRefetching } = useAdminStats();
 
   // 1. ALL HOOKS MUST GO BEFORE ANY EARLY RETURNS
@@ -53,7 +54,7 @@ export default function AdminDashboard() {
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3b82f6" />}
     >
       {/* Header Section */}
-      <View className="flex-row justify-between items-center mb-8 mt-2">
+      <View className="flex-row justify-between items-center mb-8 mt-14">
         <View>
           <Text className="text-3xl font-extrabold text-gray-900 tracking-tight">Dashboard</Text>
           <Text className="text-gray-500 font-medium mt-1">

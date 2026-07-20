@@ -7,7 +7,6 @@ export const storage = {
       try {
         return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
       } catch (e) {
-        console.error('Local storage is unavailable:', e);
         return null;
       }
     }
@@ -21,7 +20,6 @@ export const storage = {
           localStorage.setItem(key, value);
         }
       } catch (e) {
-        console.error('Local storage is unavailable:', e);
       }
       return;
     }
@@ -35,7 +33,6 @@ export const storage = {
           localStorage.removeItem(key);
         }
       } catch (e) {
-        console.error('Local storage is unavailable:', e);
       }
       return;
     }

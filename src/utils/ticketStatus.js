@@ -11,3 +11,14 @@ export const STATUS_STYLES = {
 export function statusLabel(status) {
   return (status || '').replace(/_/g, ' ');
 }
+
+export function canReopen(ticket) {
+  if (!ticket) return false;
+  if (ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED') return false;
+
+  const referenceTime = ticket.status === 'CLOSED' ? ticket.closed_at : ticket.resolved_at;
+  if (!referenceTime) return false;
+
+  const elapsedMs = Date.now() - new Date(referenceTime).getTime();
+  return elapsedMs < 24 * 60 * 60 * 1000;
+}

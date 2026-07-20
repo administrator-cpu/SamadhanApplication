@@ -17,9 +17,24 @@ export const authService = {
     return data;
   },
 
-  // used later for forgot-password flow
   forgotPassword: async (email) => {
     const { data } = await apiClient.post('/forgot-password', { email });
     return data;
   },
+
+  verifyOtp: async (email, otpCode) => {
+    const { data } = await apiClient.post('/verify-otp', { email, otpCode });
+    return data;
+  },
+
+  resetPassword: async (email, otpCode, newPassword) => {
+    const { data } = await apiClient.post('/reset-password', { email, otpCode, newPassword });
+    return data;
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+  const payload = currentPassword ? { currentPassword, newPassword } : { newPassword };
+  const { data } = await apiClient.post('/change-password', payload);
+  return data;
+},
 };

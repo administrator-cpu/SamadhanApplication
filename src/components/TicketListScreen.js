@@ -1,5 +1,5 @@
 // src/components/TicketListScreen.js
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,19 @@ import {
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useTickets } from '../hooks/useTickets';
-import { STATUS_STYLES, statusLabel } from '../utils/ticketStatus';
+import { statusLabel } from '../utils/ticketStatus';
 
 const STATUS_FILTERS = ['ALL', 'OPEN', 'IN_PROGRESS', 'ESCALATED', 'RESOLVED', 'CLOSED'];
+
+// Upgraded, vibrant badge configurations
+const STATUS_CONFIG = {
+  OPEN: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: 'file-text', iconColor: '#1d4ed8' },
+  IN_PROGRESS: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: 'clock', iconColor: '#b45309' },
+  ESCALATED: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: 'alert-triangle', iconColor: '#b91c1c' },
+  RESOLVED: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: 'check-circle', iconColor: '#047857' },
+  CLOSED: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', icon: 'archive', iconColor: '#475569' },
+  REOPENED: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', icon: 'refresh-ccw', iconColor: '#7e22ce' },
+};
 
 const safeStatusLabel = (status) => {
   if (status === 'ALL') return 'All Tickets';
@@ -24,7 +34,7 @@ const safeStatusLabel = (status) => {
 
 export default function TicketListScreen({ basePath, statusGroup, ownership }) {
   const router = useRouter();
-  
+
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -32,7 +42,7 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchInput.trim());
-    }, 500);
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -53,7 +63,9 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
     ownership,
   });
 
-  const tickets = data?.pages.flatMap((page) => page.tickets) ?? [];
+  const tickets = useMemo(() => {
+    return data?.pages.flatMap((page) => page.tickets) ?? [];
+  }, [data?.pages]);
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -61,88 +73,88 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Use useCallback so the reference doesn't change on every render
-  const renderItem = useCallback(({ item }) => (
-    <MemoizedTicketCard 
-      ticket={item} 
-      onPress={() => router.push(`${basePath}/${item.id}`)} 
-    />
-  ), [basePath, router]);
+  const renderItem = useCallback(
+    ({ item }) => (
+      <MemoizedTicketCard ticket={item} onPress={() => router.push(`${basePath}/${item.id}`)} />
+    ),
+    [basePath, router]
+  );
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text className="text-gray-500 mt-4 font-medium">Loading tickets...</Text>
+      <View className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" color="#0f172a" />
       </View>
     );
   }
 
   if (isError) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 px-6">
-        <Feather name="alert-triangle" size={48} color="#ef4444" className="mb-4" />
-        <Text className="text-gray-900 font-bold text-lg mb-2">Failed to load tickets</Text>
-        <Text className="text-gray-500 text-center mb-6">
+      <View className="flex-1 bg-white items-center justify-center p-6">
+        <View className="bg-red-50 p-4 rounded-full mb-4">
+          <Feather name="alert-circle" size={32} color="#ef4444" />
+        </View>
+        <Text className="text-xl font-bold text-slate-900 mb-2">Unable to load tickets</Text>
+        <Text className="text-slate-500 text-center mb-8">
           {error?.message || 'Please check your connection and try again.'}
         </Text>
-        <Pressable 
-          onPress={() => refetch()} 
-          className="bg-blue-600 rounded-xl px-6 py-3 flex-row items-center"
+        <Pressable
+          onPress={() => refetch()}
+          className="bg-slate-900 px-8 py-4 rounded-xl active:bg-slate-800"
         >
-          <Feather name="refresh-cw" size={16} color="white" className="mr-2" />
-          <Text className="text-white font-semibold">Try Again</Text>
+          <Text className="text-white font-bold text-base">Try Again</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Search Bar */}
-      <View className="px-4 pt-4 pb-3 bg-white border-b border-gray-100">
-        <View className="flex-row items-center bg-gray-100/80 border border-gray-200 rounded-xl px-3 h-12">
-          <Feather name="search" size={18} color="#6b7280" />
+    <View className="flex-1 bg-slate-50">
+
+      {/* Sleek Header & Search */}
+      <View className="bg-white pt-4 pb-2 px-6 border-b border-slate-100 shadow-sm shadow-slate-100 z-10">
+        <Text className="text-3xl font-extrabold text-slate-900 tracking-tight py-5 mb-4">Tickets</Text>
+
+        <View className="flex-row items-center bg-slate-100 border border-slate-200 rounded-xl px-4 h-12 mb-4">
+          <Feather name="search" size={18} color="#64748b" />
           <TextInput
             value={searchInput}
             onChangeText={setSearchInput}
-            placeholder="Search ticket number..."
-            placeholderTextColor="#9ca3af"
-            className="flex-1 px-3 py-2 text-base text-gray-900"
+            placeholder="Search by ID or keyword..."
+            placeholderTextColor="#94a3b8"
+            className="flex-1 h-full ml-3 text-slate-900 text-base font-medium"
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
             onSubmitEditing={() => Keyboard.dismiss()}
           />
           {searchInput.length > 0 && (
-            <Pressable onPress={() => setSearchInput('')} className="p-1">
-              <Feather name="x-circle" size={18} color="#9ca3af" />
+            <Pressable onPress={() => setSearchInput('')} className="bg-slate-200 rounded-full p-1">
+              <Feather name="x" size={14} color="#475569" />
             </Pressable>
           )}
         </View>
       </View>
 
-      {/* Status Filter Chips */}
-      <View className="bg-white pb-3">
+      {/* Modern Filter Chips */}
+      <View className="bg-slate-50 pt-3 pb-1">
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
           data={STATUS_FILTERS}
           keyExtractor={(item) => item}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, gap: 8 }}
+          contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
           renderItem={({ item }) => {
             const isActive = statusFilter === item;
             return (
               <Pressable
                 onPress={() => setStatusFilter(item)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                className={`px-4 py-2 rounded-full border ${
-                  isActive 
-                    ? 'bg-blue-600 border-blue-600' 
-                    : 'bg-white border-gray-200 shadow-sm'
-                }`}
+                className={`px-5 py-2.5 rounded-full border ${isActive
+                    ? 'bg-slate-900 border-slate-900'
+                    : 'bg-white border-slate-200 active:bg-slate-100'
+                  }`}
               >
-                <Text className={`text-sm font-medium ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-slate-600'}`}>
                   {safeStatusLabel(item)}
                 </Text>
               </Pressable>
@@ -154,43 +166,35 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
       {/* Ticket List */}
       <FlatList
         data={tickets}
-        // FIX 1: Combine ID and index to completely protect against backend duplicate ID crashes
         keyExtractor={(item, index) => `${item.id}-${index}`}
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 24, paddingBottom: 80 }}
         showsVerticalScrollIndicator={false}
         renderItem={renderItem}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
-        
-        // FIX 2: FlatList Performance Optimizations to prevent freezing
-        initialNumToRender={8} // Only render first 8 items immediately
-        maxToRenderPerBatch={8} // Render in small chunks
-        windowSize={5} // Keep less items in memory outside the visible screen
-        removeClippedSubviews={true} // Unmount components that are off-screen
-
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3b82f6" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#0f172a" />
         }
         ListEmptyComponent={
-          <View className="items-center justify-center py-24">
-            <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
-              <Feather name="inbox" size={28} color="#9ca3af" />
+          <View className="items-center justify-center py-20 mt-10">
+            <View className="bg-slate-100 w-24 h-24 rounded-full items-center justify-center mb-6">
+              <Feather name="inbox" size={40} color="#94a3b8" />
             </View>
-            <Text className="text-gray-900 font-bold text-lg mb-1">No tickets found</Text>
-            <Text className="text-gray-500 text-center max-w-[250px]">
-              {debouncedQuery 
-                ? `No results match "${debouncedQuery}" in ${safeStatusLabel(statusFilter)}.` 
-                : 'There are no tickets matching this filter.'}
+            <Text className="text-lg font-bold text-slate-900 mb-2">No tickets found</Text>
+            <Text className="text-slate-500 text-center px-10">
+              {debouncedQuery
+                ? `We couldn't find anything matching "${debouncedQuery}".`
+                : 'You are all caught up! There are no tickets here.'}
             </Text>
           </View>
         }
         ListFooterComponent={
           isFetchingNextPage ? (
             <View className="py-6 items-center">
-              <ActivityIndicator color="#3b82f6" />
+              <ActivityIndicator color="#0f172a" />
             </View>
           ) : (
-            <View className="h-10" />
+            <View className="h-4" />
           )
         }
       />
@@ -198,38 +202,41 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
   );
 }
 
-// FIX 3: Wrap the TicketCard in React.memo() so it doesn't re-render unless its specific props change
+// ------------------------------------------------------------------
+// UPGRADED CARD COMPONENT
+// ------------------------------------------------------------------
 const MemoizedTicketCard = memo(function TicketCard({ ticket, onPress }) {
-  const style = STATUS_STYLES[ticket.status] || STATUS_STYLES.CLOSED;
+  const config = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.CLOSED;
+  const desc = ticket.circuit_description || 'No description provided';
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      className="bg-white rounded-2xl mb-3 p-4 shadow-sm border border-gray-100 flex-row items-center justify-between"
+      className="bg-white border border-slate-100 rounded-2xl p-4 mb-3 shadow-sm shadow-slate-100 active:bg-slate-50 active:scale-[0.98]"
     >
-      <View className="flex-1 mr-4">
-        <View className="flex-row items-center gap-x-2 mb-1.5">
-          <Text className="text-gray-900 font-bold text-base tracking-tight">
-            #{ticket.ticket_no}
-          </Text>
-          <View className={`px-2 py-0.5 rounded-md ${style.bg}`}>
-            <Text className={`text-[10px] font-bold uppercase tracking-wider ${style.text}`}>
-              {statusLabel(ticket.status)}
-            </Text>
-          </View>
+      <View className="flex-row items-start gap-4">
+        
+        {/* Left Column: Bold Status Indicator */}
+        <View className={`w-10 h-10 rounded-full items-center justify-center border ${config.bg} ${config.border}`}>
+           <Feather name={config.icon} size={16} color={config.iconColor} />
         </View>
-        <Text 
-          className="text-gray-500 text-sm leading-5" 
-          numberOfLines={2} 
-          ellipsizeMode="tail"
-        >
-          {ticket.circuit_description || 'No description provided for this ticket.'}
-        </Text>
-      </View>
 
-      <View className="w-8 h-8 rounded-full bg-gray-50 items-center justify-center">
-        <Feather name="chevron-right" size={18} color="#9ca3af" />
+        {/* Right Column: Content */}
+        <View className="flex-1 justify-center pt-0.5">
+           <View className="flex-row justify-between items-center mb-1">
+             <Text className={`text-[10px] font-bold uppercase tracking-widest ${config.text}`}>
+               {statusLabel(ticket.status)}
+             </Text>
+             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               {ticket.ticket_no}
+             </Text>
+           </View>
+           
+           <Text className="text-base font-bold text-slate-900 leading-tight" numberOfLines={2}>
+             {desc}
+           </Text>
+        </View>
+
       </View>
     </Pressable>
   );

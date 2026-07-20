@@ -20,27 +20,41 @@ export default ({ config }) => {
     },
   }[env];
 
-  return {
-    ...config,
-    name: envConfig.name,
-    slug: "samadhan",
-    android: {
-      package: envConfig.androidPackage,
+ return {
+  ...config,
+  name: envConfig.name,
+  slug: "samadhan",
+  icon: "./assets/icon.png",
+  android: {
+    package: envConfig.androidPackage,
+    softwareKeyboardLayoutMode: 'resize',
+    googleServicesFile: './google-services.json',
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
     },
-    ios: {
-      bundleIdentifier: envConfig.androidPackage,
-    },
-    plugins: [
-      "expo-router",
-      "expo-splash-screen",
-      "expo-status-bar",
-      "expo-web-browser",
+  },
+  ios: {
+    bundleIdentifier: envConfig.androidPackage,
+  },
+  splash: {
+    image: "./assets/splash-icon.png",
+    resizeMode: "contain",
+    backgroundColor: "#ffffff",
+  },
+  plugins: [
+    "expo-router",
+    "expo-splash-screen",
+    "expo-status-bar",
+    "expo-web-browser",
+    [
+      "expo-notifications",
+      { color: "#2563eb" },
     ],
-    extra: {
-      apiUrl: envConfig.apiUrl,
-      eas: {
-        projectId: "20dbfe9a-6b5a-45d2-baa3-e74d84f4a258",
-      },
-    },
-  };
+  ],
+  scheme: 'samadhan',
+  extra: {
+    apiUrl: envConfig.apiUrl,
+    eas: { projectId: "20dbfe9a-6b5a-45d2-baa3-e74d84f4a258" },
+  },
+};
 };
