@@ -1,5 +1,5 @@
 // src/components/RaiseTicketForm.js
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import CategoryPicker from './CategoryPicker';
 import { useCreateTicket } from '../hooks/useTickets';
+import ConnectionPicker from './ConnectionPicker';
+import { useMyConnections } from '../hooks/useCustomers';
 
 const MAX_IMAGES = 10;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -36,6 +38,20 @@ export default function RaiseTicketForm({ role, listPath }) {
   const [images, setImages] = useState([]);
 
   const { mutate, isPending, error } = useCreateTicket();
+
+  const { circuitId: prefilledCircuitId } = useLocalSearchParams();
+  const { data: connectionsData } = useMyConnections();
+  const connections = connectionsData?.connections || [];
+
+  const [selectedCircuit, setSelectedCircuit] = useState(null);
+  const [circuitPickerOpen, setCircuitPickerOpen] = useState(false);
+
+  useEffect(() => {
+    if (prefilledCircuitId && connections.length > 0) {
+      const match = connections.find((c) => c.fabCircuitId === prefilledCircuitId);
+      if (match) setSelectedCircuit(match);
+    }
+  }, [prefilledCircuitId, connections]);
 
   const addAlternateEmail = () => {
     const email = alternateEmailInput.trim();
@@ -73,11 +89,14 @@ export default function RaiseTicketForm({ role, listPath }) {
     setImages((prev) => prev.filter((img) => img.uri !== uri));
   };
 
-  const validate = () => {
+const validate = () => {
     if (isSales && !customerEmail.trim()) return 'Customer email is required.';
     if (isSales && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) return 'Invalid customer email.';
     if (!category) return 'Please select a category.';
-    if (!circuitDescription.trim()) return 'Circuit description is required.';
+    
+    // Check for selectedCircuit instead of circuitDescription
+    if (!selectedCircuit) return 'Please select a circuit.'; 
+    
     return null;
   };
 
@@ -91,7 +110,10 @@ export default function RaiseTicketForm({ role, listPath }) {
     const formData = new FormData();
     if (isSales) formData.append('customerEmail', customerEmail.trim().toLowerCase());
     formData.append('issueCategoryId', category.id);
-    formData.append('circuitDescription', circuitDescription.trim());
+    
+    // Append the ID from the selected dropdown item
+    formData.append('circuitDescription', selectedCircuit.fabCircuitId); 
+    
     if (message.trim()) formData.append('message', message.trim());
     alternateEmails.forEach((email) => formData.append('alternateEmail', email));
 
@@ -111,8 +133,8 @@ export default function RaiseTicketForm({ role, listPath }) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      className="flex-1 bg-white" 
+    <KeyboardAvoidingView
+      className="flex-1 bg-white"
       behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
@@ -122,7 +144,7 @@ export default function RaiseTicketForm({ role, listPath }) {
         <Text className="text-slate-500 mt-1 text-base">Let's get this issue sorted out.</Text>
       </View>
 
-      <ScrollView 
+      <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 24, gap: 28 }}
@@ -151,7 +173,7 @@ export default function RaiseTicketForm({ role, listPath }) {
 
         <View className="gap-2">
           <Text className="text-sm font-semibold text-slate-900">Issue Category <Text className="text-red-500">*</Text></Text>
-          <Pressable 
+          <Pressable
             onPress={() => setCategoryPickerOpen(true)}
             className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 h-14"
           >
@@ -163,13 +185,25 @@ export default function RaiseTicketForm({ role, listPath }) {
         </View>
 
         <View className="gap-2">
-          <Text className="text-sm font-semibold text-slate-900">Circuit Description <Text className="text-red-500">*</Text></Text>
-          <TextInput
-            value={circuitDescription}
-            onChangeText={setCircuitDescription}
-            placeholder="e.g., FAB-123 or location"
-            placeholderTextColor="#94a3b8"
-            className="bg-slate-50 border border-slate-200 rounded-xl px-4 h-14 text-slate-900 text-base font-medium focus:border-blue-500 focus:bg-white"
+          <Text className="text-sm font-semibold text-slate-900">
+            Circuit Description <Text className="text-red-500">*</Text>
+          </Text>
+          <Pressable 
+            onPress={() => setCircuitPickerOpen(true)}
+            className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 h-14"
+          >
+            <Text className={`text-base font-medium ${selectedCircuit ? 'text-slate-900' : 'text-slate-400'}`}>
+              {selectedCircuit ? selectedCircuit.fabCircuitId : 'Select Circuit ID'}
+            </Text>
+            <Feather name="chevron-down" size={20} color="#64748b" />
+          </Pressable>
+
+          <ConnectionPicker
+            visible={circuitPickerOpen}
+            connections={connections}
+            selectedId={selectedCircuit?.fabCircuitId}
+            onSelect={setSelectedCircuit}
+            onClose={() => setCircuitPickerOpen(false)}
           />
         </View>
 
@@ -199,14 +233,14 @@ export default function RaiseTicketForm({ role, listPath }) {
               onSubmitEditing={addAlternateEmail}
               className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 h-14 text-slate-900 text-base font-medium focus:border-blue-500 focus:bg-white"
             />
-            <Pressable 
+            <Pressable
               onPress={addAlternateEmail}
               className="bg-slate-900 w-14 h-14 rounded-xl items-center justify-center active:bg-slate-800"
             >
               <Feather name="plus" size={24} color="#ffffff" />
             </Pressable>
           </View>
-          
+
           {alternateEmails.length > 0 && (
             <View className="flex-row flex-wrap gap-2 mt-2">
               {alternateEmails.map((email) => (
@@ -227,7 +261,7 @@ export default function RaiseTicketForm({ role, listPath }) {
             {images.map((img) => (
               <View key={img.uri} className="relative">
                 <Image source={{ uri: img.uri }} className="w-20 h-20 rounded-xl bg-slate-100 border border-slate-200" />
-                <Pressable 
+                <Pressable
                   onPress={() => removeImage(img.uri)}
                   className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-sm border border-slate-100"
                 >
@@ -237,9 +271,9 @@ export default function RaiseTicketForm({ role, listPath }) {
                 </Pressable>
               </View>
             ))}
-            
+
             {images.length < MAX_IMAGES && (
-              <Pressable 
+              <Pressable
                 onPress={pickImages}
                 className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 items-center justify-center active:bg-slate-100"
               >
@@ -253,12 +287,11 @@ export default function RaiseTicketForm({ role, listPath }) {
 
       {/* Sticky Bottom Footer */}
       <View className="p-4 bg-white border-t border-slate-100 pb-8">
-        <Pressable 
-          onPress={handleSubmit} 
+        <Pressable
+          onPress={handleSubmit}
           disabled={isPending}
-          className={`h-14 rounded-xl flex-row items-center justify-center ${
-            isPending ? 'bg-slate-300' : 'bg-slate-900 active:bg-slate-800'
-          }`}
+          className={`h-14 rounded-xl flex-row items-center justify-center ${isPending ? 'bg-slate-300' : 'bg-slate-900 active:bg-slate-800'
+            }`}
         >
           {isPending ? (
             <ActivityIndicator size="small" color="#ffffff" />

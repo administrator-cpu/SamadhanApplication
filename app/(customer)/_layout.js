@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 
 export default function CustomerTabsLayout() {
@@ -57,6 +57,19 @@ export default function CustomerTabsLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <Feather name="user" size={22} color={color} />,
         }}
+      />
+      <Tabs.Screen
+        name="connections"
+        options={{
+          title: 'My Connection',
+          tabBarIcon: ({ color, size }) => <Ionicons name="wifi-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen 
+        name="support-guidelines" 
+        options={{ 
+          href: null, 
+        }} 
       />
     </Tabs>
   );

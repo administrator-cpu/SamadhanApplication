@@ -79,7 +79,7 @@ export default function ProfileScreen() {
     }
 
     const formData = new FormData();
-    formData.append('images', {
+    formData.append('profile_image', {
       uri: asset.uri,
       name: asset.fileName || `profile-${Date.now()}.jpg`,
       type: asset.mimeType || 'image/jpeg',

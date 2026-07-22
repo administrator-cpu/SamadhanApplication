@@ -39,6 +39,10 @@ export const ticketService = {
 
   updateRCA: async (id, formData) => {
     const { data } = await apiClient.patch(`/tickets/${id}/rca`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      transformRequest: (data) => data,
     });
     return data.data;
   },
@@ -77,9 +81,9 @@ export const ticketService = {
     return data.data;
   },
   getResolvedTicketsForExport: async (year, month) => {
-  const { data } = await apiClient.get('/tickets/resolved', {
-    params: { exportAll: true, year, month },
-  });
-  return data.data.tickets; 
-},
+    const { data } = await apiClient.get('/tickets/resolved', {
+      params: { exportAll: true, year, month },
+    });
+    return data.data.tickets;
+  },
 };

@@ -66,7 +66,12 @@ export const userService = {
     },
 
     uploadProfileImage: async (formData) => {
-        const { data } = await apiClient.post('/users/profile/image', formData);
+        const { data } = await apiClient.post('/users/profile/image', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+            transformRequest: (data) => data, 
+        });
         return data.data;
     },
 

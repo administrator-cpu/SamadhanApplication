@@ -85,7 +85,7 @@ export default function CustomerDashboard() {
           {getGreeting()}
         </Text>
         <Text className="text-white text-3xl font-bold tracking-tight">
-          {user?.name?.split(' ')[0] || 'Customer'}
+          {user?.name || 'Customer'}
         </Text>
       </View>
 
@@ -132,6 +132,23 @@ export default function CustomerDashboard() {
           </View>
         </View>
       </Pressable>
+
+      {/* --- Support Guidelines Button --- */}
+      <View className="px-5 mt-4">
+        <Pressable
+          onPress={() => router.push('/(customer)/support-guidelines')}
+          className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex-row items-center active:bg-slate-50"
+        >
+          <View className="w-10 h-10 rounded-full bg-indigo-50 items-center justify-center mr-3">
+            <Feather name="shield" size={18} color="#4f46e5" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-sm font-bold text-slate-900 mb-0.5">Support Guidelines & SLA</Text>
+            <Text className="text-xs text-slate-500">View escalation matrix and resolution times</Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#cbd5e1" />
+        </Pressable>
+      </View>
 
       {/* --- Active/Recent Tickets Section --- */}
       <View className="px-5 mt-8">
