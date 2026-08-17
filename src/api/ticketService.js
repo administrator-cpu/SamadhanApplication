@@ -23,7 +23,19 @@ export const ticketService = {
   },
 
   addTicketEvent: async (id, payload) => {
-    const { data } = await apiClient.post(`/tickets/${id}/events`, payload);
+    // Attachments are sent as multipart form-data (same convention as the
+    // RCA and ticket-creation endpoints); plain text-only replies stay JSON.
+    const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
+    const { data } = await apiClient.post(
+      `/tickets/${id}/events`,
+      payload,
+      isFormData
+        ? {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            transformRequest: (d) => d,
+          }
+        : undefined
+    );
     return data.data;
   },
 

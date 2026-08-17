@@ -2,5 +2,5 @@
 import { Stack } from 'expo-router';
 
 export default function StaffStack() {
-  return <Stack screenOptions={{ headerShown: true }} />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

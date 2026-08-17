@@ -8,16 +8,21 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/authStore';
 import { setOnSessionExpired } from '../src/api/client';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { queryClient } from '../src/api/queryClient';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import '../global.css';
 import OfflineBanner from '../src/components/OfflineBanner';
+import InitializingScreen from '../src/components/InitializingScreen';
+
+// 1. ADDED: Import the specific font weights we need
+import { useFonts, Fraunces_500Medium } from '@expo-google-fonts/fraunces';
+import { Karla_400Regular, Karla_600SemiBold } from '@expo-google-fonts/karla';
 
 LogBox.ignoreLogs([
   "Can't perform a React state update on a component that hasn't mounted yet",
 ]);
 
-// Keep splash screen visible only until our React component mounts
 SplashScreen.preventAutoHideAsync();
 
 const ROLE_HOME_ROUTES = {
@@ -29,32 +34,17 @@ const ROLE_HOME_ROUTES = {
 
 const ROLE_GROUPS = ['(customer)', '(agent)', '(admin)', '(sales)'];
 
-// --- PREMIUM LOADING UI ---
-// This replaces the boring 'return null' with an eye-candy loading state
-function InitializingScreen() {
-  return (
-    <View className="flex-1 bg-slate-900 justify-center items-center">
-      <StatusBar style="light" />
-      {/* Immersive background glow */}
-      <View className="absolute w-72 h-72 bg-blue-600 rounded-full opacity-20 blur-3xl" />
-      
-      {/* App Icon / Branding */}
-      <View className="w-20 h-20 bg-blue-600 rounded-[24px] items-center justify-center mb-8 shadow-2xl shadow-blue-600/50">
-        <Feather name="wifi" size={40} color="#ffffff" />
-      </View>
-      
-      <ActivityIndicator size="large" color="#3b82f6" className="mb-4" />
-      <Text className="text-slate-400 font-bold tracking-widest uppercase text-xs">
-        Securing Connection...
-      </Text>
-    </View>
-  );
-}
-
 function RootLayoutNav() {
   const { isInitializing, isAuthenticated, user, hydrate, clearAuth } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
+
+  // 2. ADDED: Initialize the fonts
+  const [fontsLoaded, fontError] = useFonts({
+    Fraunces_500Medium,
+    Karla_400Regular,
+    Karla_600SemiBold,
+  });
 
   useEffect(() => {
     setOnSessionExpired(() => {
@@ -62,59 +52,57 @@ function RootLayoutNav() {
       router.replace('/(auth)/login');
     });
   }, [clearAuth, router]);
+  
   usePushNotifications();
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
-  // Hide the static native splash screen as soon as this component mounts.
-  // This allows our beautiful `InitializingScreen` to take over smoothly.
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
 
-useEffect(() => {
-  if (isInitializing) return;
+  useEffect(() => {
+    if (isInitializing) return;
 
-  const currentGroup = segments[0];
-  const inAuthGroup = currentGroup === '(auth)';
-  const inForcedChangeScreen = currentGroup === '(auth)' && segments[1] === 'force-password-change';
-  const inRoleGroup = ROLE_GROUPS.includes(currentGroup);
-  const homeRoute = ROLE_HOME_ROUTES[user?.role];
+    const currentGroup = segments[0];
+    const inAuthGroup = currentGroup === '(auth)';
+    const inForcedChangeScreen = currentGroup === '(auth)' && segments[1] === 'force-password-change';
+    const inRoleGroup = ROLE_GROUPS.includes(currentGroup);
+    const homeRoute = ROLE_HOME_ROUTES[user?.role];
 
-  if (!isAuthenticated) {
-    if (!inAuthGroup) router.replace('/(auth)/login');
-    return;
-  }
+    if (!isAuthenticated) {
+      if (!inAuthGroup) router.replace('/(auth)/login');
+      return;
+    }
 
-  if (!homeRoute) {
-    return;
-  }
+    if (!homeRoute) {
+      return;
+    }
 
-  // Forced password change takes priority over everything else once logged in.
-  if (user?.must_change_password && !inForcedChangeScreen) {
-    router.replace('/(auth)/force-password-change');
-    return;
-  }
+    if (user?.must_change_password && !inForcedChangeScreen) {
+      router.replace('/(auth)/force-password-change');
+      return;
+    }
 
-  if (!user?.must_change_password && inForcedChangeScreen) {
-    router.replace(homeRoute);
-    return;
-  }
+    if (!user?.must_change_password && inForcedChangeScreen) {
+      router.replace(homeRoute);
+      return;
+    }
 
-  if (inAuthGroup && !inForcedChangeScreen) {
-    router.replace(homeRoute);
-    return;
-  }
+    if (inAuthGroup && !inForcedChangeScreen) {
+      router.replace(homeRoute);
+      return;
+    }
 
-  if (inRoleGroup && `(${currentGroup.slice(1, -1)})` !== homeRoute.slice(1)) {
-    router.replace(homeRoute);
-  }
-}, [isAuthenticated, isInitializing, segments, user?.role, user?.must_change_password]);
+    if (inRoleGroup && `(${currentGroup.slice(1, -1)})` !== homeRoute.slice(1)) {
+      router.replace(homeRoute);
+    }
+  }, [isAuthenticated, isInitializing, segments, user?.role, user?.must_change_password]);
 
-  // Render our premium loading screen instead of an empty screen
-  if (isInitializing) {
+  // 3. ADDED: Keep showing your premium loading screen until BOTH auth is ready AND fonts are loaded
+  if (isInitializing || (!fontsLoaded && !fontError)) {
     return <InitializingScreen />;
   }
 
@@ -144,8 +132,10 @@ useEffect(() => {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <RootLayoutNav />
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <RootLayoutNav />
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

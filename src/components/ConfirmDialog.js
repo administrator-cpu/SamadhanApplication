@@ -1,5 +1,5 @@
 // src/components/ConfirmDialog.js
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 export default function ConfirmDialog({
@@ -11,6 +11,10 @@ export default function ConfirmDialog({
   icon = 'help-circle',
   accentColor = '#3b82f6',
   destructive = false,
+  showInput = false,
+  inputValue = '',
+  onInputChange,
+  inputPlaceholder = 'Add details (optional)',
   onConfirm,
   onCancel,
 }) {
@@ -24,6 +28,17 @@ export default function ConfirmDialog({
 
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
+
+          {showInput && (
+            <TextInput
+              value={inputValue}
+              onChangeText={onInputChange}
+              placeholder={inputPlaceholder}
+              placeholderTextColor="#94a3b8"
+              multiline
+              style={styles.input}
+            />
+          )}
 
           <View style={styles.buttonRow}>
             <Pressable style={[styles.button, styles.cancelButton]} onPress={onCancel}>
@@ -86,6 +101,20 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 22,
+  },
+  input: {
+    width: '100%',
+    minHeight: 72,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    fontSize: 14,
+    color: '#0f172a',
+    textAlignVertical: 'top',
+    marginTop: -8,
     marginBottom: 22,
   },
   buttonRow: {

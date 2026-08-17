@@ -64,6 +64,7 @@ export default function TicketStatusActions({ ticket }) {
   const { mutate, isPending } = useUpdateTicketStatus(ticket?.id);
   const [pendingStatus, setPendingStatus] = useState(null);
   const [dialogTarget, setDialogTarget] = useState(null); // status string or null
+  const [reopenReason, setReopenReason] = useState('');
 
   if (!ticket) return null;
 
@@ -74,14 +75,23 @@ export default function TicketStatusActions({ ticket }) {
     return null;
   }
 
+  const closeDialog = () => {
+    setDialogTarget(null);
+    setReopenReason('');
+  };
+
   const handleConfirm = () => {
     const targetStatus = dialogTarget;
-    setDialogTarget(null);
+    const payload =
+      targetStatus === 'REOPENED' ? { status: targetStatus, message: reopenReason } : { status: targetStatus };
+
+    closeDialog();
     setPendingStatus(targetStatus);
-    mutate({ status: targetStatus }, { onSettled: () => setPendingStatus(null) });
+    mutate(payload, { onSettled: () => setPendingStatus(null) });
   };
 
   const dialogConfig = dialogTarget ? DIALOG_CONFIG[dialogTarget] : null;
+  const isReopenDialog = dialogTarget === 'REOPENED';
 
   return (
     <>
@@ -118,8 +128,12 @@ export default function TicketStatusActions({ ticket }) {
         accentColor={dialogConfig?.accentColor}
         destructive={dialogConfig?.destructive}
         confirmLabel={dialogConfig?.confirmLabel}
+        showInput={isReopenDialog}
+        inputValue={reopenReason}
+        onInputChange={setReopenReason}
+        inputPlaceholder="Reason for reopening (optional)"
         onConfirm={handleConfirm}
-        onCancel={() => setDialogTarget(null)}
+        onCancel={closeDialog}
       />
     </>
   );

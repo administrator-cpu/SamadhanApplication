@@ -2,7 +2,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { storage } from '../utils/storage';
 
-const BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'https://api.gorevive.com/api/v1';
+const BASE_URL = Constants.expoConfig?.extra?.apiUrl ;
 
 const apiClient = axios.create({
     baseURL: BASE_URL,

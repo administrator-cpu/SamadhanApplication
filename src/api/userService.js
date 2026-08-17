@@ -26,6 +26,18 @@ export const userService = {
         const { data } = await apiClient.get('/users/my-connections');
         return data.data;
     },
+
+    getConnectionsByEmail: async (email) => {
+        const { data } = await apiClient.get('/users/customers/connections-by-email', {
+            params: { email },
+        });
+        return data.data;
+    },
+
+    getCustomerConnections: async (customerId) => {
+        const { data } = await apiClient.get(`/users/customers/${customerId}/connections`);
+        return data.data?.connections ?? data.data ?? [];
+    },
     registerPushToken: async (token, platform) => {
         const { data } = await apiClient.post('/users/push-token', { token, platform });
         return data.data;
@@ -56,10 +68,6 @@ export const userService = {
         return data.data;
     },
 
-    getCustomerConnections: async (customerRowId) => {
-        const { data } = await apiClient.get(`/users/customers/${customerRowId}/connections`);
-        return data.data;
-    },
     updateMyProfile: async (payload) => {
         const { data } = await apiClient.put('/users/profile', payload);
         return data.data;

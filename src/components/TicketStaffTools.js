@@ -18,9 +18,17 @@ export default function TicketStaffTools({ ticket }) {
   const user = useAuthStore((state) => state.user);
   const isStaff = STAFF_ROLES.includes(user?.role);
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('rca');
+  const [activeTab, setActiveTab] = useState('reassign');
 
   if (!isStaff || !ticket) return null;
+
+  // 1. Check if the ticket is resolved or closed
+  const isResolvedOrClosed = ['RESOLVED', 'CLOSED'].includes(ticket.status);
+
+  // 2. Filter tabs dynamically: hide 'rca' if not resolved/closed
+  const visibleTabs = TABS.filter(
+    (tab) => tab.key !== 'rca' || isResolvedOrClosed
+  );
 
   return (
     <>
@@ -39,7 +47,8 @@ export default function TicketStaffTools({ ticket }) {
           </View>
 
           <View style={styles.tabRow}>
-            {TABS.map((tab) => (
+            {/* 3. Map over the filtered visibleTabs instead of TABS */}
+            {visibleTabs.map((tab) => (
               <Pressable
                 key={tab.key}
                 onPress={() => setActiveTab(tab.key)}
@@ -54,7 +63,10 @@ export default function TicketStaffTools({ ticket }) {
           </View>
 
           <View style={styles.tabContent}>
-            {activeTab === 'rca' && <TicketRCAForm ticket={ticket} onDone={() => setModalOpen(false)} />}
+            {/* 4. Update the content render condition */}
+            {activeTab === 'rca' && isResolvedOrClosed && (
+              <TicketRCAForm ticket={ticket} onDone={() => setModalOpen(false)} />
+            )}
             {activeTab === 'outage' && <TicketOutageForm ticket={ticket} onDone={() => setModalOpen(false)} />}
             {activeTab === 'reassign' && <TicketReassignForm ticket={ticket} onDone={() => setModalOpen(false)} />}
           </View>

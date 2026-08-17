@@ -9,10 +9,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
-  StyleSheet,
-  Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../store/authStore';
 import { useUpdateMyProfile, useUploadProfileImage, useRemoveProfileImage } from '../hooks/useCustomers';
@@ -26,6 +25,7 @@ const ROLE_LABELS = {
 };
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
   const logout = useAuthStore((state) => state.logout);
@@ -35,6 +35,8 @@ export default function ProfileScreen() {
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [imageUploading, setImageUploading] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
   const { mutate: updateProfile, isPending: isSaving, error: saveError } = useUpdateMyProfile();
   const { mutate: uploadImage } = useUploadProfileImage();
@@ -64,12 +66,12 @@ export default function ProfileScreen() {
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // Updated for newer expo-image-picker API
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
-    
+
     if (result.canceled) return;
 
     const asset = result.assets[0];
@@ -101,8 +103,8 @@ export default function ProfileScreen() {
       'Are you sure you want to remove your profile photo?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
+        {
+          text: 'Remove',
           style: 'destructive',
           onPress: () => {
             removeImage(undefined, {
@@ -110,419 +112,253 @@ export default function ProfileScreen() {
                 setUser(data.user || { ...user, profile_image: null });
               },
             });
-          }
-        }
+          },
+        },
       ]
     );
   };
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      contentContainerStyle={styles.contentContainer}
+    <ScrollView
+      className="flex-1 bg-slate-50"
+      contentContainerStyle={{ padding: 20, paddingTop: 32, paddingBottom: 160 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Identity Card */}
-      <View style={styles.card}>
-        <View style={styles.avatarSection}>
-          <TouchableOpacity 
-            activeOpacity={0.8}
-            onPress={handlePickImage} 
+      {/* --- HERO IDENTITY CARD --- */}
+      <View className="bg-surface rounded-2xl p-6 mb-4 shadow-sm relative">
+        {!isEditing && (
+          <TouchableOpacity
+            onPress={() => setIsEditing(true)}
+            activeOpacity={0.7}
+            className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-bg-subtle items-center justify-center"
+          >
+            <Feather name="settings" size={20} color="#5C5348" />
+          </TouchableOpacity>
+        )}
+
+        <View className="items-center mt-2 mb-4">
+          <TouchableOpacity
+            onPress={handlePickImage}
             disabled={imageUploading}
-            style={styles.avatarContainer}
+            activeOpacity={0.85}
+            className="relative mb-4"
           >
             {imageUploading ? (
-              <View style={styles.avatarPlaceholder}>
-                <ActivityIndicator color="#3b82f6" size="large" />
+              <View className="w-28 h-28 rounded-full bg-primary-50 items-center justify-center">
+                <ActivityIndicator color="#FF5A36" size="large" />
               </View>
             ) : user?.profile_image ? (
-              <Image source={{ uri: user.profile_image }} style={styles.avatarImage} />
+              <Image
+                source={{ uri: user.profile_image }}
+                className="w-28 h-28 rounded-full bg-bg-subtle"
+              />
             ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitial}>{user?.name?.[0]?.toUpperCase() || '?'}</Text>
+              <View className="w-28 h-28 rounded-full bg-primary-50 items-center justify-center border-2 border-primary-200">
+                <Text className="font-sans-semibold text-4xl text-primary-500">
+                  {user?.name?.[0]?.toUpperCase() || '?'}
+                </Text>
               </View>
             )}
-            <View style={styles.cameraOverlay}>
-              <Feather name="camera" size={16} color="#ffffff" />
+            <View className="absolute bottom-0.5 right-0.5 w-9 h-9 rounded-full bg-primary-500 items-center justify-center border-[3px] border-surface">
+              <Feather name="camera" size={15} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
 
           {user?.profile_image && (
-            <TouchableOpacity onPress={handleRemoveImage} style={styles.removePhotoBtn}>
-              <Text style={styles.removePhotoText}>Remove photo</Text>
+            <TouchableOpacity
+              onPress={handleRemoveImage}
+              activeOpacity={0.7}
+              className="px-4 py-2 bg-error-bg rounded-lg"
+            >
+              <Text className="font-sans-semibold text-error-text text-xs">Remove photo</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {!isEditing && (
-          <View style={styles.identityTextContainer}>
-            <Text style={styles.name}>{user?.name}</Text>
-            <View style={styles.roleBadge}>
-              <Feather name="shield" size={12} color="#2563eb" />
-              <Text style={styles.roleBadgeText}>{ROLE_LABELS[user?.role] || user?.role}</Text>
+          <View className="items-center">
+            <Text className="font-sans-semibold text-text-primary text-2xl mb-2.5">
+              {user?.name || 'Customer'}
+            </Text>
+            <View className="flex-row items-center bg-primary-50 px-3.5 py-1.5 rounded-full">
+              <Feather name="shield" size={12} color="#764222" style={{ marginRight: 6 }} />
+              <Text className="font-sans-semibold text-primary-700 text-xs uppercase tracking-widest">
+                {ROLE_LABELS[user?.role] || user?.role || 'CUSTOMER'}
+              </Text>
             </View>
           </View>
         )}
       </View>
 
-      {/* Details / Edit Card */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{isEditing ? 'Edit Profile' : 'Contact Details'}</Text>
-          {isStaff && !isEditing && (
-            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editIconBtn}>
-              <Feather name="edit-2" size={18} color="#2563eb" />
+      {/* --- COMMAND CENTER (Customer-only) --- */}
+      {!isEditing && !isStaff && (
+        <View className="mb-4">
+          <Text className="font-sans-semibold text-text-primary text-base mb-3 ml-1">
+            Features
+          </Text>
+          <View className="flex-row" style={{ gap: 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push('/(customer)/connections')}
+              className="flex-1 bg-surface rounded-2xl p-4 shadow-sm"
+            >
+              <View className="w-11 h-11 rounded-full bg-info-bg items-center justify-center mb-3">
+                <Feather name="wifi" size={18} color="#0E8074" />
+              </View>
+              <Text className="font-sans-semibold text-text-primary text-sm mb-0.5">
+                My Connection
+              </Text>
+              <Text className="font-sans text-text-tertiary text-xs">View services</Text>
             </TouchableOpacity>
-          )}
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push('/(customer)/analytics')}
+              className="flex-1 bg-surface rounded-2xl p-4 shadow-sm"
+            >
+              <View className="w-11 h-11 rounded-full bg-success-bg items-center justify-center mb-3">
+                <Feather name="bar-chart-2" size={18} color="#0F9D58" />
+              </View>
+              <Text className="font-sans-semibold text-text-primary text-sm mb-0.5">
+                Analytics
+              </Text>
+              <Text className="font-sans text-text-tertiary text-xs">Network insights</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+      )}
+
+      {/* --- DETAILS / EDIT CARD --- */}
+      <View className="bg-surface rounded-2xl p-6 mb-4 shadow-sm">
+        <Text className="font-sans-semibold text-text-primary text-lg mb-5">
+          {isEditing ? 'Edit Profile' : 'Contact Details'}
+        </Text>
 
         {saveError ? (
-          <View style={styles.errorBox}>
-            <Feather name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{saveError.message || 'Failed to save changes.'}</Text>
+          <View className="flex-row items-center bg-error-bg p-3.5 rounded-xl mb-5">
+            <Feather name="alert-circle" size={18} color="#9C4A3C" style={{ marginRight: 8 }} />
+            <Text className="font-sans-medium text-error-text text-sm flex-1">
+              {saveError.message || 'Failed to save changes.'}
+            </Text>
           </View>
         ) : null}
 
         {isEditing ? (
-          <View style={styles.formContainer}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name</Text>
-              <View style={styles.inputWrapper}>
-                <Feather name="user" size={18} color="#94a3b8" style={styles.inputIcon} />
-                <TextInput 
-                  value={name} 
-                  onChangeText={setName} 
-                  style={styles.input} 
+          <View>
+            <View className="mb-4">
+              <Text className="font-sans-semibold text-text-secondary text-xs ml-0.5 mb-2">
+                Full Name
+              </Text>
+              <View
+                className={`flex-row items-center rounded-2xl bg-bg-subtle border ${
+                  nameFocused ? 'border-text-secondary' : 'border-border'
+                }`}
+              >
+                <Feather name="user" size={18} color="#948A7C" style={{ paddingLeft: 16 }} />
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  onFocus={() => setNameFocused(true)}
+                  onBlur={() => setNameFocused(false)}
                   placeholder="Enter your full name"
+                  placeholderTextColor="#948A7C"
+                  className="flex-1 p-4 font-sans-medium text-text-primary text-sm"
                 />
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone Number</Text>
-              <View style={styles.inputWrapper}>
-                <Feather name="phone" size={18} color="#94a3b8" style={styles.inputIcon} />
-                <TextInput 
-                  value={phone} 
-                  onChangeText={setPhone} 
-                  keyboardType="phone-pad" 
-                  style={styles.input} 
+            <View className="mb-2">
+              <Text className="font-sans-semibold text-text-secondary text-xs ml-0.5 mb-2">
+                Phone Number
+              </Text>
+              <View
+                className={`flex-row items-center rounded-2xl bg-bg-subtle border ${
+                  phoneFocused ? 'border-text-secondary' : 'border-border'
+                }`}
+              >
+                <Feather name="phone" size={18} color="#948A7C" style={{ paddingLeft: 16 }} />
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  onFocus={() => setPhoneFocused(true)}
+                  onBlur={() => setPhoneFocused(false)}
+                  keyboardType="phone-pad"
                   placeholder="Enter your phone number"
+                  placeholderTextColor="#948A7C"
+                  className="flex-1 p-4 font-sans-medium text-text-primary text-sm"
                 />
               </View>
             </View>
 
-            <View style={styles.editButtonsRow}>
-              <TouchableOpacity onPress={handleCancelEdit} style={styles.cancelButton}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+            <View className="flex-row mt-3" style={{ gap: 12 }}>
+              <TouchableOpacity
+                onPress={handleCancelEdit}
+                activeOpacity={0.85}
+                className="flex-1 py-4 rounded-2xl bg-bg-subtle items-center"
+              >
+                <Text className="font-sans-semibold text-text-secondary text-sm">Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleSave} disabled={isSaving} style={styles.saveButton}>
+
+              <TouchableOpacity
+                onPress={handleSave}
+                disabled={isSaving}
+                activeOpacity={0.85}
+                className="flex-[2] py-4 rounded-2xl bg-primary-500 items-center shadow-sm"
+              >
                 {isSaving ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
+                  <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                  <Text className="font-sans-semibold text-white text-sm">Save Changes</Text>
                 )}
               </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <View style={styles.detailsContainer}>
-            <View style={styles.detailRow}>
-              <View style={styles.detailIconWrap}>
-                <Feather name="mail" size={18} color="#64748b" />
+          <View>
+            <View className="flex-row items-center">
+              <View className="w-11 h-11 rounded-2xl bg-bg-subtle items-center justify-center mr-4">
+                <Feather name="mail" size={18} color="#5C5348" />
               </View>
-              <View style={styles.detailTextWrap}>
-                <Text style={styles.detailLabel}>Email Address</Text>
-                <Text style={styles.detailValue}>{user?.email}</Text>
+              <View className="flex-1">
+                <Text className="font-sans-semibold text-text-tertiary text-xs mb-0.5">
+                  Email Address
+                </Text>
+                <Text className="font-sans-semibold text-text-primary text-sm">
+                  {user?.email || 'Not provided'}
+                </Text>
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View className="h-px bg-border ml-[60px] my-4" />
 
-            <View style={styles.detailRow}>
-              <View style={styles.detailIconWrap}>
-                <Feather name="phone" size={18} color="#64748b" />
+            <View className="flex-row items-center">
+              <View className="w-11 h-11 rounded-2xl bg-bg-subtle items-center justify-center mr-4">
+                <Feather name="phone" size={18} color="#5C5348" />
               </View>
-              <View style={styles.detailTextWrap}>
-                <Text style={styles.detailLabel}>Phone Number</Text>
-                <Text style={styles.detailValue}>
-                  {user?.phone ? user.phone : <Text style={styles.placeholderText}>Not provided</Text>}
+              <View className="flex-1">
+                <Text className="font-sans-semibold text-text-tertiary text-xs mb-0.5">
+                  Phone Number
                 </Text>
+                {user?.phone ? (
+                  <Text className="font-sans-semibold text-text-primary text-sm">{user.phone}</Text>
+                ) : (
+                  <Text className="font-sans text-text-tertiary text-sm italic">Not provided</Text>
+                )}
               </View>
             </View>
           </View>
         )}
       </View>
 
-      {/* Actions */}
-      <TouchableOpacity onPress={logout} style={styles.logoutButton} activeOpacity={0.8}>
-        <Feather name="log-out" size={18} color="#ef4444" />
-        <Text style={styles.logoutText}>Log Out</Text>
+      {/* --- PREMIUM LOGOUT --- */}
+      <TouchableOpacity
+        onPress={logout}
+        activeOpacity={0.85}
+        className="flex-row items-center justify-center bg-error-bg rounded-2xl h-14"
+      >
+        <Feather name="log-out" size={18} color="#9C4A3C" />
+        <Text className="font-sans-semibold text-error-text text-base ml-2.5">Log Out</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#f8fafc' 
-  },
-  contentContainer: { 
-    padding: 20, 
-    paddingTop:50,
-    paddingBottom: 40,
-    gap: 16,
-  },
-
-  /* Card Styles */
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#94a3b8',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-
-  /* Avatar Section */
-  avatarSection: { 
-    alignItems: 'center', 
-    marginBottom: 16 
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  avatarImage: { 
-    width: 104, 
-    height: 104, 
-    borderRadius: 52, 
-    backgroundColor: '#f1f5f9' 
-  },
-  avatarPlaceholder: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: '#eff6ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#dbeafe',
-  },
-  avatarInitial: { 
-    fontSize: 36, 
-    fontWeight: '800', 
-    color: '#2563eb' 
-  },
-  cameraOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 4,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#ffffff',
-  },
-  removePhotoBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#fef2f2',
-    borderRadius: 8,
-  },
-  removePhotoText: { 
-    color: '#ef4444', 
-    fontSize: 13, 
-    fontWeight: '700' 
-  },
-
-  /* Identity Text */
-  identityTextContainer: {
-    alignItems: 'center',
-  },
-  name: { 
-    fontSize: 22, 
-    fontWeight: '800', 
-    color: '#0f172a',
-    marginBottom: 8,
-  },
-  roleBadge: { 
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff', 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 99, 
-  },
-  roleBadgeText: { 
-    fontSize: 12, 
-    fontWeight: '700', 
-    color: '#2563eb', 
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  /* Read-Only Details */
-  detailsContainer: {
-    gap: 16,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  detailIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailTextWrap: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 13,
-    color: '#64748b',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 15,
-    color: '#0f172a',
-    fontWeight: '600',
-  },
-  placeholderText: {
-    color: '#94a3b8',
-    fontStyle: 'italic',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#f1f5f9',
-    marginLeft: 60, // Aligns with the text, skipping the icon
-  },
-
-  /* Edit Form */
-  formContainer: {
-    gap: 16,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: { 
-    fontSize: 13, 
-    fontWeight: '600', 
-    color: '#475569', 
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1, 
-    borderColor: '#e2e8f0', 
-    borderRadius: 12, 
-    backgroundColor: '#f8fafc',
-  },
-  inputIcon: {
-    paddingLeft: 14,
-  },
-  input: { 
-    flex: 1,
-    padding: 14, 
-    fontSize: 15, 
-    color: '#0f172a',
-  },
-  editButtonsRow: { 
-    flexDirection: 'row', 
-    gap: 12, 
-    marginTop: 8,
-  },
-  cancelButton: { 
-    flex: 1, 
-    paddingVertical: 14, 
-    borderRadius: 12, 
-    backgroundColor: '#f1f5f9', 
-    alignItems: 'center' 
-  },
-  cancelButtonText: { 
-    fontSize: 15, 
-    fontWeight: '700', 
-    color: '#475569' 
-  },
-  saveButton: { 
-    flex: 2, 
-    paddingVertical: 14, 
-    borderRadius: 12, 
-    backgroundColor: '#2563eb', 
-    alignItems: 'center' 
-  },
-  saveButtonText: { 
-    fontSize: 15, 
-    fontWeight: '700', 
-    color: '#ffffff' 
-  },
-
-  /* Misc */
-  editIconBtn: {
-    padding: 8,
-    backgroundColor: '#eff6ff',
-    borderRadius: 8,
-  },
-  errorBox: { 
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef2f2',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  errorText: { 
-    color: '#ef4444', 
-    fontSize: 13, 
-    fontWeight: '500',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    borderRadius: 16,
-    paddingVertical: 16,
-    marginTop: 8,
-  },
-  logoutText: { 
-    color: '#ef4444', 
-    fontWeight: '700', 
-    fontSize: 16 
-  },
-});

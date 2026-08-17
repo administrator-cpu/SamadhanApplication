@@ -1,125 +1,158 @@
 // app/(admin)/staff/index.js
-import { useState } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  Text,
+  View,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+
 import { useEmployees } from '../../../src/hooks/useCustomers';
 
-const ROLE_COLORS = {
-  ADMIN: { bg: '#faf5ff', text: '#7c3aed' },
-  SUPPORT_AGENT: { bg: '#eff6ff', text: '#2563eb' },
-  SALES: { bg: '#f0fdf4', text: '#16a34a' },
-};
-
-export default function StaffManagement() {
-  const router = useRouter();
-  const [page, setPage] = useState(1);
-  const { data, isLoading } = useEmployees({ page, limit: 10 });
-
-  const employees = (data?.employees || []).filter(Boolean);
-  const pagination = data?.pagination;
-
+function getInitials(name) {
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Staff</Text>
-        <Pressable style={styles.addButton} onPress={() => router.push('/(admin)/staff/create')}>
-          <Feather name="plus" size={18} color="#ffffff" />
-        </Pressable>
-      </View>
-
-      {isLoading ? (
-        <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={employees}
-          keyExtractor={(item, index) => String(item?.employee_row_id ?? item?.employee_id ?? index)}
-          contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => {
-            const roleColors = ROLE_COLORS[item.role] || ROLE_COLORS.SUPPORT_AGENT;
-            return (
-              <Pressable
-                style={styles.row}
-                onPress={() => router.push(`/(admin)/staff/${item.employee_row_id}`)}
-              >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase() || '?'}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.email}>{item.email}</Text>
-                </View>
-                <View style={[styles.roleBadge, { backgroundColor: roleColors.bg }]}>
-                  <Text style={[styles.roleBadgeText, { color: roleColors.text }]}>
-                    {item.role?.replace(/_/g, ' ')}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color="#cbd5e1" style={{ marginLeft: 8 }} />
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={<Text style={styles.emptyText}>No staff members found.</Text>}
-          ListFooterComponent={
-            pagination && pagination.pages > 1 ? (
-              <View style={styles.paginationRow}>
-                <Pressable
-                  disabled={page <= 1}
-                  onPress={() => setPage((p) => p - 1)}
-                  style={[styles.pageButton, page <= 1 && styles.pageButtonDisabled]}
-                >
-                  <Feather name="chevron-left" size={18} color={page <= 1 ? '#cbd5e1' : '#334155'} />
-                </Pressable>
-                <Text style={styles.pageLabel}>Page {pagination.currentPage} of {pagination.pages}</Text>
-                <Pressable
-                  disabled={page >= pagination.pages}
-                  onPress={() => setPage((p) => p + 1)}
-                  style={[styles.pageButton, page >= pagination.pages && styles.pageButtonDisabled]}
-                >
-                  <Feather name="chevron-right" size={18} color={page >= pagination.pages ? '#cbd5e1' : '#334155'} />
-                </Pressable>
-              </View>
-            ) : null
-          }
-        />
-      )}
-    </View>
+    (name || '')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word.charAt(0).toUpperCase())
+      .join('') || '?'
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 50,
-    backgroundColor: '#ffffff',
-  },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  addButton: { width: 44, height: 44, borderRadius: 10, backgroundColor: '#3b82f6', alignItems: 'center', justifyContent: 'center' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#2563eb', fontWeight: '700' },
-  name: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  email: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  roleBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
-  roleBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
-  paginationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingVertical: 16 },
-  pageButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
-  pageButtonDisabled: { opacity: 0.5 },
-  pageLabel: { fontSize: 13, color: '#475569' },
-});
+export default function StaffScreen() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  const { data, isLoading, isError, error, refetch, isRefetching } = useEmployees({
+    page,
+    limit,
+  });
+
+  const employees = data?.employees ?? [];
+  const pagination = data?.pagination;
+  const hasNextPage = pagination ? page * limit < pagination.total : false;
+
+  const renderItem = ({ item }) => (
+    <Pressable
+      onPress={() => router.push(`/(admin)/staff/${item.employee_row_id}`)}
+      className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-slate-100 flex-row items-center"
+    >
+      <View className="w-11 h-11 rounded-full bg-primary-50 items-center justify-center mr-3">
+        <Text className="font-sans-semibold text-primary-600 text-sm">
+          {getInitials(item.name)}
+        </Text>
+      </View>
+      <View className="flex-1">
+        <Text className="font-sans-semibold text-slate-900 text-sm" numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text className="font-sans text-slate-500 text-xs mt-0.5" numberOfLines={1}>
+          {item.employee_id} · {item.email}
+        </Text>
+      </View>
+      <Feather name="chevron-right" size={18} color="#CBD5E1" />
+    </Pressable>
+  );
+
+  if (isError) {
+    return (
+      <View className="flex-1 bg-slate-50 items-center justify-center p-6">
+        <View className="bg-rose-50 p-4 rounded-full mb-4">
+          <Feather name="alert-circle" size={32} color="#E11D48" />
+        </View>
+        <Text className="font-sans-semibold text-slate-900 text-xl mb-2">
+          Unable to load staff
+        </Text>
+        <Text className="font-sans text-slate-500 text-center mb-8 leading-relaxed px-4">
+          {error?.message || 'Please check your connection and try again.'}
+        </Text>
+        <Pressable
+          onPress={() => refetch()}
+          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+          className="bg-primary-500 px-8 py-4 rounded-full shadow-sm"
+        >
+          <Text className="font-sans-semibold text-white text-base">Try Again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-slate-50">
+      <View className="bg-white pt-4 pb-3 px-5 border-b border-slate-200 z-10">
+        <Text className="font-sans-semibold text-slate-900 text-3xl">Staff</Text>
+      </View>
+
+      <FlatList
+        data={employees}
+        // Fixed: employee objects don't have an `.id` field — the actual
+        // row identifier is `employee_row_id` (confirmed by [id].js's
+        // lookup: e.employee_row_id === id). `item.id` was undefined for
+        // every row, so every key collapsed to the same "undefined"
+        // string — the source of both the duplicate-key warning and the
+        // FlatList render error.
+        keyExtractor={(item) => String(item.employee_row_id)}
+        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+        renderItem={renderItem}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5A36" />
+        }
+        ListEmptyComponent={
+          isLoading ? null : (
+            <View className="items-center justify-center py-20 mt-8">
+              <View className="w-24 h-24 rounded-full bg-slate-100 items-center justify-center mb-6">
+                <Feather name="users" size={36} color="#94A3B8" />
+              </View>
+              <Text className="font-sans-semibold text-slate-900 text-lg mb-2">
+                No staff members yet
+              </Text>
+              <Text className="font-sans text-slate-500 text-center px-10 leading-relaxed">
+                Employees you add will show up here.
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          isLoading ? (
+            <View className="py-6 items-center">
+              <ActivityIndicator color="#FF5A36" />
+            </View>
+          ) : pagination ? (
+            <View className="flex-row items-center justify-between mt-2 px-1">
+              <Pressable
+                onPress={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className={`px-4 py-2.5 rounded-full border border-slate-200 ${
+                  page === 1 ? 'opacity-40' : 'bg-white'
+                }`}
+              >
+                <Text className="font-sans-semibold text-slate-700 text-sm">Previous</Text>
+              </Pressable>
+
+              <Text className="font-sans text-slate-500 text-xs">
+                Page {page} of {Math.max(1, Math.ceil(pagination.total / limit))}
+              </Text>
+
+              <Pressable
+                onPress={() => setPage((p) => p + 1)}
+                disabled={!hasNextPage}
+                className={`px-4 py-2.5 rounded-full border border-slate-200 ${
+                  !hasNextPage ? 'opacity-40' : 'bg-white'
+                }`}
+              >
+                <Text className="font-sans-semibold text-slate-700 text-sm">Next</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+      />
+    </View>
+  );
+}

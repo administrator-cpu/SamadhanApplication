@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -6,19 +6,69 @@ import {
   Pressable, 
   ActivityIndicator, 
   KeyboardAvoidingView, 
-  Platform 
+  Platform, 
+  TouchableOpacity,
+  StyleSheet,
 } from 'react-native';
-import { router } from 'expo-router'; // Fixed missing import
-import { Feather } from '@expo/vector-icons'; // Added for password toggle
+import { router } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { authService } from '../../src/api/authService';
+
+const colors = {
+  bgBase: '#F7F4EF',
+  surface: '#FFFFFE',
+  border: '#E4DDD1',
+  borderStrong: '#D3C9B8',
+  textPrimary: '#2E2A24',
+  textSecondary: '#6B6255',
+  textTertiary: '#9A9184',
+  textOnBrand: '#FBF9F5',
+  primary50: '#FBEEE3',
+  primary200: '#EAC49B',
+  primary500: '#C0703A',
+  primary600: '#9C5A2C',
+  primary700: '#764222',
+  errorBg: '#F5E7E3',
+  errorText: '#9C4A3C',
+};
+
+const fonts = {
+  heading: 'Fraunces_500Medium',
+  body: 'Karla_400Regular',
+  bodySemibold: 'Karla_600SemiBold',
+};
+
+// Static — defined once, outside the component, shape never changes between renders.
+const styles = StyleSheet.create({
+  fieldWrapper: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 10,
+    // Shadow props always present (even when "off") so the native view
+    // never needs to be torn down and recreated on focus change.
+    shadowColor: colors.primary500,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  fieldWrapperFocused: {
+    borderColor: colors.primary500,
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+});
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // New state for UX
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [focusedField, setFocusedField] = useState(null);
 
   const login = useAuthStore((state) => state.login);
 
@@ -46,7 +96,6 @@ export default function LoginScreen() {
       );
 
       await login(user, accessToken, refreshToken);
-      // Root _layout.js guard handles redirection
     } catch (error) {
       setErrorMessage(error?.message || 'Login failed. Please try again.');
     } finally {
@@ -54,115 +103,212 @@ export default function LoginScreen() {
     }
   };
 
+  // Stable handler identities — avoids recreating closures every render.
+  const handleEmailFocus = useCallback(() => setFocusedField('email'), []);
+  const handlePasswordFocus = useCallback(() => setFocusedField('password'), []);
+  const handleBlur = useCallback(() => setFocusedField(null), []);
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      className="flex-1 bg-slate-50" // Softened background for eye comfort
+      style={{ flex: 1, backgroundColor: colors.bgBase }}
     >
-      <View className="flex-1 justify-center px-6">
-        <Text 
+      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Text
           accessibilityRole="header"
-          className="text-3xl font-bold text-slate-900 mb-2"
+          style={{
+            fontFamily: fonts.heading,
+            fontSize: 30,
+            lineHeight: 38,
+            fontWeight: '500',
+            color: colors.textPrimary,
+            marginBottom: 8,
+          }}
         >
           Welcome back
         </Text>
-        <Text className="text-base text-slate-500 mb-8">
+        <Text
+          style={{
+            fontFamily: fonts.body,
+            fontSize: 16,
+            lineHeight: 24,
+            color: colors.textSecondary,
+            marginBottom: 40,
+          }}
+        >
           Sign in to your Samadhan account
         </Text>
 
-        {/* Error Banner with Accessibility Live Region */}
         {errorMessage ? (
-          <View 
+          <View
             accessibilityLiveRegion="polite"
-            className="flex-row items-center bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-6"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.errorBg,
+              borderRadius: 10,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              marginBottom: 20,
+            }}
           >
-            <Feather name="alert-circle" size={18} color="#b91c1c" />
-            <Text className="text-red-700 text-sm ml-2 flex-1 font-medium">
+            <Feather name="alert-circle" size={18} color={colors.errorText} />
+            <Text
+              style={{
+                fontFamily: fonts.bodySemibold,
+                color: colors.errorText,
+                fontSize: 14,
+                marginLeft: 8,
+                flex: 1,
+              }}
+            >
               {errorMessage}
             </Text>
           </View>
         ) : null}
 
         {/* Email Input */}
-        <Text className="text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+        <Text
+          style={{
+            fontFamily: fonts.bodySemibold,
+            fontSize: 14,
+            color: colors.textPrimary,
+            marginBottom: 6,
+            marginLeft: 4,
+          }}
+        >
           Email
         </Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          editable={!isSubmitting}
-          accessibilityLabel="Email address input"
-          className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 mb-5 text-base text-slate-900"
-        />
+        <View
+          style={[
+            styles.fieldWrapper,
+            focusedField === 'email' && styles.fieldWrapperFocused,
+            { marginBottom: 18 },
+          ]}
+        >
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            onFocus={handleEmailFocus}
+            onBlur={handleBlur}
+            placeholder="you@example.com"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            editable={!isSubmitting}
+            accessibilityLabel="Email address input"
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 15,
+              fontFamily: fonts.body,
+              fontSize: 16,
+              color: colors.textPrimary,
+            }}
+          />
+        </View>
 
         {/* Password Input with Toggle */}
-        <Text className="text-sm font-semibold text-slate-700 mb-1.5 ml-1">
+        <Text
+          style={{
+            fontFamily: fonts.bodySemibold,
+            fontSize: 14,
+            color: colors.textPrimary,
+            marginBottom: 6,
+            marginLeft: 4,
+          }}
+        >
           Password
         </Text>
-        <View className="bg-white border border-slate-200 rounded-xl mb-8 flex-row items-center">
+        <View
+          style={[
+            styles.fieldWrapper,
+            focusedField === 'password' && styles.fieldWrapperFocused,
+            { marginBottom: 28, flexDirection: 'row', alignItems: 'center' },
+          ]}
+        >
           <TextInput
             value={password}
             onChangeText={setPassword}
+            onFocus={handlePasswordFocus}
+            onBlur={handleBlur}
             placeholder="••••••••"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
             textContentType="password"
             editable={!isSubmitting}
             onSubmitEditing={handleSubmit}
             returnKeyType="go"
+            blurOnSubmit={false}
             accessibilityLabel="Password input"
-            className="flex-1 px-4 py-3.5 text-base text-slate-900"
+            style={{
+              flex: 1,
+              paddingHorizontal: 16,
+              paddingVertical: 15,
+              fontFamily: fonts.body,
+              fontSize: 16,
+              color: colors.textPrimary,
+            }}
           />
           <Pressable
             onPress={() => setShowPassword(!showPassword)}
             accessibilityRole="button"
-            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-            className="p-3 mr-1"
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            hitSlop={8}
+            style={{ padding: 12, marginRight: 4 }}
           >
-            <Feather 
-              name={showPassword ? "eye-off" : "eye"} 
-              size={20} 
-              color="#64748b" 
-            />
+            <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
           </Pressable>
         </View>
 
-        {/* Submit Button */}
-        <Pressable
+        <TouchableOpacity
+          activeOpacity={0.8}
           onPress={handleSubmit}
           disabled={isSubmitting}
           accessibilityRole="button"
           accessibilityLabel="Sign in button"
-          accessibilityState={{ disabled: isSubmitting }}
-          className={`rounded-xl py-4 items-center shadow-sm ${
-            isSubmitting ? 'bg-blue-400' : 'bg-blue-600 active:bg-blue-700'
-          }`}
+          style={{
+            borderRadius: 10,
+            paddingVertical: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: isSubmitting ? colors.primary600 : colors.primary500,
+            opacity: isSubmitting ? 0.85 : 1,
+            shadowColor: '#2E2A24',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 3,
+            marginTop: 8,
+          }}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color={colors.textOnBrand} />
           ) : (
-            <Text className="text-white font-semibold text-base tracking-wide">
+            <Text
+              style={{
+                fontFamily: fonts.bodySemibold,
+                color: colors.textOnBrand,
+                fontSize: 16,
+                letterSpacing: 0.3,
+              }}
+            >
               Sign In
             </Text>
           )}
-        </Pressable>
+        </TouchableOpacity>
 
-        {/* Forgot Password Link */}
-        <View className="mt-6 items-center">
+        <View style={{ marginTop: 24, alignItems: 'center' }}>
           <Pressable
             disabled={isSubmitting}
             onPress={() => router.push('/(auth)/forgot-password')}
             accessibilityRole="button"
             accessibilityLabel="Navigate to forgot password screen"
-            className="p-2" // Increased touch target size
+            hitSlop={8}
+            style={{ padding: 8 }}
           >
-            <Text className="text-blue-600 font-medium text-sm">
+            <Text style={{ fontFamily: fonts.bodySemibold, color: colors.primary500, fontSize: 14 }}>
               Forgot your password?
             </Text>
           </Pressable>

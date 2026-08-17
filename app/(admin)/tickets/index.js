@@ -5,6 +5,6 @@ import TicketListScreen from '../../../src/components/TicketListScreen';
 export default function AdminTicketList() {
   return (<>
     <Stack.Screen options={{ headerShown: false }} />
-    <TicketListScreen basePath="/(admin)/tickets" />;
+    <TicketListScreen basePath="/(admin)/tickets" />
   </>)
 }

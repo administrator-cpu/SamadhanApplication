@@ -1,15 +1,16 @@
-// app/(admin)/customers.js
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useCustomers } from '../../../src/hooks/useCustomers';
+import { useAuthStore } from '../../../src/store/authStore';
 
 export default function CustomerManagement() {
   const router = useRouter();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -18,8 +19,6 @@ export default function CustomerManagement() {
     }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
-
-
 
   const { data, isLoading, isFetching } = useCustomers({ page, limit: 10, search });
   const customers = (data?.customers || []).filter(Boolean);
@@ -51,29 +50,24 @@ export default function CustomerManagement() {
         <FlatList
           data={customers}
           keyExtractor={(item, index) => String(item?.customer_row_id ?? item?.customer_id ?? index)}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
               onPress={() => router.push(`/(admin)/customers/${item.customer_row_id}`)}
             >
-              {/* <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase() || '?'}</Text>
-              </View> */}
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.email}>{item.email}</Text>
               </View>
               <View style={{ gap: 5 }}>
-                 {item.outstanding !== null && item.outstanding !== undefined && (
-                <Text style={{ fontSize: 12, fontWeight: '700', color: item.outstanding > 0 ? '#dc2626' : '#16a34a', marginRight: 8 }}>
-                  ₹{item.outstanding}
-                </Text>
-              )}
-              <Text style={styles.customerId}>{item.customer_id}</Text>
+                {item.outstanding !== null && item.outstanding !== undefined && user.email !== "abhishek@fab5network.com" && (
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: item.outstanding > 0 ? '#dc2626' : '#16a34a', marginRight: 8 }}>
+                    ₹{item.outstanding}
+                  </Text>
+                )}
+                <Text style={styles.customerId}>{item.customer_id}</Text>
               </View>
-             
-              {/* <Feather name="chevron-right" size={18} color="#cbd5e1" style={{ marginLeft: 4 }} /> */}
             </Pressable>
           )}
           ListEmptyComponent={
@@ -120,7 +114,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 44,
-    
   },
   searchInput: { flex: 1, fontSize: 14, color: '#0f172a' },
   addButton: {
@@ -142,15 +135,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#dbeafe',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: '#2563eb', fontWeight: '700' },
   name: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
   email: { fontSize: 12, color: '#64748b', marginTop: 2 },
   customerId: { fontSize: 11, color: '#94a3b8' },

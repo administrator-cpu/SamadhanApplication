@@ -5,21 +5,34 @@ import { ticketService } from '../api/ticketService';
 export function useTickets({ status, searchQuery, statusGroup, ownership } = {}) {
   return useInfiniteQuery({
     queryKey: ['tickets', { status, searchQuery, statusGroup, ownership }],
-    queryFn: ({ pageParam }) =>
-      ticketService.getTickets({
-        cursor: pageParam,
+
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await ticketService.getTickets({
+        page: pageParam,
         limit: 15,
         status: status || undefined,
         searchQuery: searchQuery || undefined,
         statusGroup: statusGroup || undefined,
         ownership: ownership || undefined,
-      }),
-    initialPageParam: undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.pagination?.hasNext ? lastPage.pagination.nextCursor : undefined,
-    placeholderData: keepPreviousData,
+      });
+      return res;
+    },
+
+    initialPageParam: 1,
+
+    getNextPageParam: (lastPage, allPages) => {
+      const pagination = lastPage.pagination;
+      if (!pagination) return undefined;
+      const currentPage = pagination.currentPage ?? allPages.length;
+      const totalPages = pagination.pages ?? pagination.totalPages;
+      return currentPage < totalPages ? currentPage + 1 : undefined;
+    },
+    gcTime: 60 * 1000,
+     maxPages: 3,
   });
 }
+
+
 
 export function useTicket(id) {
   return useQuery({
@@ -108,7 +121,7 @@ export function useCategories() {
   return useQuery({
     queryKey: ['categories'],
     queryFn: ticketService.getCategories,
-    staleTime: 24 * 60 * 60 * 1000, 
+    staleTime: 24 * 60 * 60 * 1000,
   });
 }
 

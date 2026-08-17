@@ -20,11 +20,26 @@ export function useCreateCustomer() {
   });
 }
 
-export function useMyConnections() {
+export function useMyConnections({ enabled = true } = {}) {
   return useQuery({
     queryKey: ['my-connections'],
     queryFn: userService.getMyConnections,
     staleTime: 10 * 60 * 1000,
+    enabled,
+  });
+}
+
+export function useConnectionsByEmail() {
+  return useMutation({
+    mutationFn: (email) => userService.getConnectionsByEmail(email),
+  });
+}
+
+export function useCustomerConnections(customerId) {
+  return useQuery({
+    queryKey: ['customerConnections', customerId],
+    queryFn: () => userService.getCustomerConnections(customerId),
+    enabled: !!customerId,
   });
 }
 
@@ -83,14 +98,6 @@ export function useDeleteCustomer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
-  });
-}
-
-export function useCustomerConnections(customerRowId) {
-  return useQuery({
-    queryKey: ['customer-connections', customerRowId],
-    queryFn: () => userService.getCustomerConnections(customerRowId),
-    enabled: !!customerRowId,
   });
 }
 

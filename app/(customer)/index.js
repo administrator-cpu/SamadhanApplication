@@ -1,21 +1,31 @@
 // app/(customer)/index.js
-import { useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
+import { useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  Animated,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+// import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { useTickets } from '../../src/hooks/useTickets';
 import { useMyConnections } from '../../src/hooks/useCustomers';
 import { statusLabel } from '../../src/utils/ticketStatus';
+import TicketCard from '../../src/components/TicketCard';
 
-// Minimalist status colors (used for left-borders and text accents)
 const STATUS_THEME = {
-  OPEN: { border: 'border-blue-500', bg: 'bg-blue-50', text: 'text-blue-600' },
-  IN_PROGRESS: { border: 'border-amber-500', bg: 'bg-amber-50', text: 'text-amber-600' },
-  ESCALATED: { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-600' },
-  RESOLVED: { border: 'border-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-600' },
-  CLOSED: { border: 'border-slate-300', bg: 'bg-slate-100', text: 'text-slate-500' },
-  REOPENED: { border: 'border-purple-500', bg: 'bg-purple-50', text: 'text-purple-600' },
+  OPEN: { icon: 'circle', iconBg: 'bg-info-bg', iconColor: '#0E8074', chipText: 'text-info-text' },
+  IN_PROGRESS: { icon: 'loader', iconBg: 'bg-primary-50', iconColor: '#FF5A36', chipText: 'text-primary-700' },
+  ESCALATED: { icon: 'alert-triangle', iconBg: 'bg-warning-bg', iconColor: '#D68A00', chipText: 'text-warning-text' },
+  RESOLVED: { icon: 'check-circle', iconBg: 'bg-success-bg', iconColor: '#0F9D58', chipText: 'text-success-text' },
+  CLOSED: { icon: 'archive', iconBg: 'bg-bg-subtle', iconColor: '#948A7C', chipText: 'text-text-tertiary' },
+  REOPENED: { icon: 'refresh-ccw', iconBg: 'bg-warning-bg', iconColor: '#D68A00', chipText: 'text-warning-text' },
 };
 
 function getGreeting() {
@@ -24,6 +34,266 @@ function getGreeting() {
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
+
+function firstName(fullName) {
+  if (!fullName) return 'there';
+  return fullName.trim().split(' ')[0];
+}
+
+/* ---------------------------------------------------------------- */
+/* AnimatedCard — unchanged                                          */
+/* ---------------------------------------------------------------- */
+
+function AnimatedCard({ onPress, className = '', style, children, disabled = false }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateTo = (toValue) => {
+    Animated.spring(scale, {
+      toValue,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 6,
+    }).start();
+  };
+
+  return (
+    <TouchableWithoutFeedback
+      onPress={onPress}
+      onPressIn={() => animateTo(0.96)}
+      onPressOut={() => animateTo(1)}
+      disabled={disabled}
+    >
+      <Animated.View className={className} style={[{ transform: [{ scale }] }, style]}>
+        {children}
+      </Animated.View>
+    </TouchableWithoutFeedback>
+  );
+}
+
+
+function DashboardHeader({ name }) {
+  return (
+    <View
+      className="pt-14 pb-16 px-6 rounded-b-2xl"
+      style={{ backgroundColor: '#161412' }}
+    >
+      <Text className="font-sans-semibold text-primary-200 text-xs uppercase tracking-widest mb-1.5">
+        {getGreeting()}
+      </Text>
+      <Text className="font-sans-semibold text-text-on-brand text-2xl leading-8" numberOfLines={2}>
+        Hi {firstName(name)}, how can we help you today?
+      </Text>
+    </View>
+  );
+}
+/* ---------------------------------------------------------------- */
+/* Metric panel — ONE floating white surface, halves divided by a    */
+/* thin vertical rule, each half centered internally                 */
+/* ---------------------------------------------------------------- */
+
+function MetricHalf({ icon, iconColor, iconBg, label, value, showDivider }) {
+  return (
+    <View
+      className={`flex-1 items-center justify-center py-5 ${showDivider ? 'border-r border-border/40' : ''}`}
+    >
+      <View className={`w-9 h-9 rounded-full ${iconBg} items-center justify-center mb-2`}>
+        <Feather name={icon} size={15} color={iconColor} />
+      </View>
+      <Text className="font-sans-semibold text-text-primary text-xl mb-0.5" numberOfLines={1}>
+        {value}
+      </Text>
+      <Text className="font-sans text-text-tertiary text-xs" numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function MetricPanel({ activeCount, resolvedCount, totalCount }) {
+  const hasAnyTickets = totalCount > 0;
+  if (!hasAnyTickets) return null;
+
+  // Build the visible metric list dynamically so the divider only ever
+  // appears between two *rendered* halves, never dangling on an empty slot.
+  const metrics = [
+    activeCount > 0 && { key: 'active', icon: 'activity', iconColor: '#FF5A36', iconBg: 'bg-primary-50', label: 'Active', value: activeCount },
+    resolvedCount > 0 && { key: 'resolved', icon: 'check-circle', iconColor: '#0F9D58', iconBg: 'bg-success-bg', label: 'Resolved', value: resolvedCount },
+    { key: 'total', icon: 'folder', iconColor: '#0E8074', iconBg: 'bg-info-bg', label: 'All Tickets', value: totalCount },
+  ].filter(Boolean);
+
+  return (
+    <View className="-mt-9 px-5">
+      <View className="bg-surface rounded-xl shadow-lg border border-border/40 flex-row overflow-hidden">
+        {metrics.map((metric, index) => (
+          <MetricHalf key={metric.key} {...metric} showDivider={index < metrics.length - 1} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Network status                                                     */
+/* ---------------------------------------------------------------- */
+
+function NetworkStatusStrip({ serviceType }) {
+  return (
+    <View className="mx-5 mt-4 flex-row items-center bg-success-bg rounded-xl px-4 py-2.5 border border-success-text/10">
+      <View className="w-2 h-2 rounded-full bg-success-text shrink-0 mr-3" />
+      <Text className="flex-1 font-sans text-success-text text-xs" numberOfLines={1}>
+        {serviceType || 'Fiber Connection'} is online and stable
+      </Text>
+      <Feather name="wifi" size={14} color="#0F9D58" />
+    </View>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Raise Ticket                                                       */
+/* ---------------------------------------------------------------- */
+
+function RaiseTicketCard({ onPress }) {
+  return (
+    <AnimatedCard
+      onPress={onPress}
+      className="w-[48%] aspect-square rounded-2xl p-4 bg-primary-50 border border-primary-200/50 overflow-hidden"
+    >
+      <View className="absolute -top-6 -right-8 w-24 h-24 rounded-full bg-primary-100" />
+
+      <View className="flex-1 justify-between">
+        <View className="w-[40px] h-[40px] rounded-full bg-surface items-center justify-center shrink-0">
+          <Feather name="plus" size={18} color="#FF5A36" />
+        </View>
+
+        <Text className="font-sans-semibold text-text-primary text-sm" numberOfLines={2}>
+          Facing an issue?
+        </Text>
+
+        <View className="bg-primary-500 rounded-full px-3.5 py-2 flex-row items-center self-start shadow-sm">
+          <Text className="font-sans-semibold text-text-on-brand text-xs mr-1.5">Raise Ticket</Text>
+          <Feather name="arrow-up-right" size={12} color="#FFFFFF" />
+        </View>
+      </View>
+    </AnimatedCard>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Action grid                                                        */
+/* ---------------------------------------------------------------- */
+
+function ActionTile({ icon, iconBg, iconColor, label, subtitle, onPress }) {
+  return (
+    <AnimatedCard
+      onPress={onPress}
+      className="w-[48%] aspect-square rounded-2xl p-4 bg-surface shadow-sm border border-border/40"
+    >
+      <View className="flex-1 justify-between">
+        <View className={`w-[40px] h-[40px] rounded-full ${iconBg} items-center justify-center shrink-0`}>
+          <Feather name={icon} size={16} color={iconColor} />
+        </View>
+
+        <View>
+          <View className="flex-row items-center mb-0.5">
+            <Text className="font-sans-semibold text-text-primary text-sm flex-1" numberOfLines={1}>
+              {label}
+            </Text>
+            <Feather name="arrow-up-right" size={14} color="#948A7C" />
+          </View>
+          <Text className="font-sans text-text-tertiary text-xs" numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+      </View>
+    </AnimatedCard>
+  );
+}
+
+function ActionGrid({ onRaiseTicket, onMyTickets, onGuidelines, onAnalytics }) {
+  return (
+    <View className="px-5 mt-6 flex-row flex-wrap justify-between" style={{ rowGap: 12 }}>
+      <RaiseTicketCard onPress={onRaiseTicket} />
+      <ActionTile
+        icon="file-text"
+        iconBg="bg-info-bg"
+        iconColor="#0E8074"
+        label="My Tickets"
+        subtitle="View history"
+        onPress={onMyTickets}
+      />
+      <ActionTile
+        icon="book-open"
+        iconBg="bg-secondary-50"
+        iconColor="#D6900A"
+        label="Guidelines"
+        subtitle="SLAs & FAQs"
+        onPress={onGuidelines}
+      />
+      <ActionTile
+        icon="bar-chart-2"
+        iconBg="bg-success-bg"
+        iconColor="#0F9D58"
+        label="Analytics"
+        subtitle="Network insights"
+        onPress={onAnalytics}
+      />
+    </View>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Ticket card                                                        */
+/* ---------------------------------------------------------------- */
+
+// function TicketCard({ ticket, onPress }) {
+//   const theme = STATUS_THEME[ticket.status] || STATUS_THEME.CLOSED;
+//   return (
+//     <AnimatedCard
+//       onPress={onPress}
+//       className="bg-surface rounded-2xl mb-3 p-4 shadow-sm border border-border/40 flex-row items-center"
+//     >
+//       <View className={`w-[44px] h-[44px] rounded-full ${theme.iconBg} items-center justify-center shrink-0 mr-3`}>
+//         <Feather name={theme.icon} size={18} color={theme.iconColor} />
+//       </View>
+
+//       <View className="flex-1 shrink mr-2">
+//         <View className="flex-row items-center justify-between mb-1">
+//           <Text className="font-mono text-mono-sm text-text-primary shrink" numberOfLines={1}>
+//             {ticket.ticket_no}
+//           </Text>
+//           <Text className={`font-sans-semibold text-xs uppercase tracking-wide shrink-0 ml-2 ${theme.chipText}`}>
+//             {statusLabel(ticket.status)}
+//           </Text>
+//         </View>
+//         <Text className="font-sans text-sm text-text-secondary" numberOfLines={1}>
+//           {ticket.circuit_description || 'General support request'}
+//         </Text>
+//       </View>
+
+//       <Feather name="chevron-right" size={18} color="#E0C4A0" />
+//     </AnimatedCard>
+//   );
+// }
+
+function EmptyTicketsState() {
+  return (
+    <View className="bg-surface rounded-2xl p-8 items-center shadow-sm border border-border/40 mt-2">
+      <View className="w-16 h-16 bg-secondary-50 rounded-full items-center justify-center mb-4">
+        <Feather name="coffee" size={26} color="#D6900A" />
+      </View>
+      <Text className="font-sans-semibold text-text-primary text-lg mb-1.5 text-center">
+        You're all caught up
+      </Text>
+      <Text className="font-sans text-text-secondary text-sm text-center leading-relaxed px-4">
+        No active support requests right now. Enjoy your seamless connection!
+      </Text>
+    </View>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Screen                                                             */
+/* ---------------------------------------------------------------- */
 
 export default function CustomerDashboard() {
   const router = useRouter();
@@ -34,152 +304,71 @@ export default function CustomerDashboard() {
 
   const allTickets = useMemo(() => data?.pages.flatMap((p) => p.tickets) ?? [], [data]);
   const activeTickets = allTickets.filter((t) => ['OPEN', 'IN_PROGRESS', 'ESCALATED'].includes(t.status));
+  const resolvedTickets = allTickets.filter((t) => ['RESOLVED', 'CLOSED'].includes(t.status));
   const recentTickets = allTickets.slice(0, 4);
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-slate-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#0f172a" />
+      <View className="flex-1 bg-bg-base items-center justify-center">
+        <ActivityIndicator size="large" color="#FF5A36" />
       </View>
     );
   }
 
-  // Sleek, minimal ticket row with a colored left border
-  const TicketRow = ({ ticket }) => {
-    const theme = STATUS_THEME[ticket.status] || STATUS_THEME.CLOSED;
-    return (
-      <Pressable
-        onPress={() => router.push(`/(customer)/tickets/${ticket.id}`)}
-        className={`bg-white rounded-2xl mb-3 p-4 border-l-4 ${theme.border} shadow-sm active:bg-slate-50 flex-row items-center`}
-      >
-        <View className="flex-1 mr-3">
-          <View className="flex-row items-center mb-1">
-            <Text className="text-sm font-extrabold text-slate-900 mr-2">{ticket.ticket_no}</Text>
-            <View className={`${theme.bg} px-2 py-0.5 rounded-md`}>
-              <Text className={`${theme.text} text-[10px] font-bold uppercase`}>
-                {statusLabel(ticket.status)}
-              </Text>
-            </View>
-          </View>
-          <Text className="text-xs text-slate-500 font-medium" numberOfLines={1}>
-            {ticket.circuit_description || 'General support request'}
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={20} color="#cbd5e1" />
-      </Pressable>
-    );
-  };
+  const ticketsToShow = activeTickets.length > 0 ? activeTickets.slice(0, 3) : recentTickets;
+  const sectionTitle = activeTickets.length > 0 ? 'Action Required' : 'Recent Support';
 
   return (
     <ScrollView
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-bg-base"
       showsVerticalScrollIndicator={false}
-      // Using standard style to prevent NativeWind ScrollView crash
-      style={{ flex: 1 }}
       contentContainerStyle={{ paddingBottom: 60 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#ffffff" />}
+      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5A36" />}
     >
-      {/* --- Dark Premium Header --- */}
-      <View className="bg-brand-navy pt-16 pb-24 px-6 rounded-b-[40px]">
-        <Text className="text-slate-400 text-sm font-medium uppercase tracking-widest mb-1">
-          {getGreeting()}
-        </Text>
-        <Text className="text-white text-3xl font-bold tracking-tight">
-          {user?.name || 'Customer'}
-        </Text>
-      </View>
+      <DashboardHeader name={user?.name} />
 
-      {/* --- Floating Network Status Card --- */}
-      <View className="-mt-12 mx-5 bg-white p-5 rounded-3xl shadow-md border border-slate-100 flex-row items-center">
-        <View className="w-12 h-12 rounded-full bg-emerald-50 items-center justify-center mr-4">
-          <Feather name="globe" size={24} color="#10b981" />
-        </View>
-        <View className="flex-1">
-          <Text className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-0.5">
-            Network Status
-          </Text>
-          <Text className="text-base font-extrabold text-slate-900">
-            {connections?.connections?.[0]?.serviceType || 'Fiber Connection'}
-          </Text>
-        </View>
-        <View className="flex-row items-center bg-emerald-50 px-3 py-1.5 rounded-full">
-          <View className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
-          <Text className="text-xs font-bold text-emerald-700">Online</Text>
-        </View>
-      </View>
+      <MetricPanel
+        activeCount={activeTickets.length}
+        resolvedCount={resolvedTickets.length}
+        totalCount={allTickets.length}
+      />
 
-      {/* --- Big Action Banner --- */}
-      <Pressable
-        onPress={() => router.push('/(customer)/raise-ticket')}
-        className="mx-5 mt-6 bg-blue-600 rounded-3xl p-6 overflow-hidden active:bg-blue-700 shadow-sm"
-      >
-        {/* Background decorative icon */}
-        <Feather 
-          name="life-buoy" 
-          size={120} 
-          color="rgba(255,255,255,0.07)" 
-          style={{ position: 'absolute', right: -20, top: -20, transform: [{ rotate: '-15deg' }] }} 
-        />
-        <View className="flex-row items-center justify-between z-10">
-          <View className="flex-1 pr-4">
-            <Text className="text-white text-xl font-bold mb-1">Need assistance?</Text>
-            <Text className="text-blue-100 text-sm leading-relaxed">
-              Report an outage, speed issue, or general inquiry instantly.
-            </Text>
-          </View>
-          <View className="w-12 h-12 bg-white rounded-full items-center justify-center shadow-sm">
-            <Feather name="arrow-right" size={24} color="#2563eb" />
-          </View>
-        </View>
-      </Pressable>
+      <NetworkStatusStrip serviceType={connections?.connections?.[0]?.serviceType} />
 
-      {/* --- Support Guidelines Button --- */}
-      <View className="px-5 mt-4">
-        <Pressable
-          onPress={() => router.push('/(customer)/support-guidelines')}
-          className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex-row items-center active:bg-slate-50"
-        >
-          <View className="w-10 h-10 rounded-full bg-indigo-50 items-center justify-center mr-3">
-            <Feather name="shield" size={18} color="#4f46e5" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-bold text-slate-900 mb-0.5">Support Guidelines & SLA</Text>
-            <Text className="text-xs text-slate-500">View escalation matrix and resolution times</Text>
-          </View>
-          <Feather name="chevron-right" size={20} color="#cbd5e1" />
-        </Pressable>
-      </View>
+      <ActionGrid
+        onRaiseTicket={() => router.push('/(customer)/raise-ticket')}
+        onMyTickets={() => router.push('/(customer)/tickets')}
+        onGuidelines={() => router.push('/(customer)/support-guidelines')}
+        onAnalytics={() => router.push('/(customer)/analytics')}
+      />
 
-      {/* --- Active/Recent Tickets Section --- */}
       <View className="px-5 mt-8">
-        <View className="flex-row justify-between items-end mb-4">
-          <Text className="text-lg font-bold text-slate-900">
-            {activeTickets.length > 0 ? 'Action Required' : 'Recent Support'}
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="font-sans-semibold text-text-primary text-xl shrink" numberOfLines={1}>
+            {sectionTitle}
           </Text>
           {(activeTickets.length > 0 || recentTickets.length > 0) && (
-            <Pressable onPress={() => router.push('/(customer)/tickets')}>
-              <Text className="text-sm font-bold text-slate-400">View All</Text>
-            </Pressable>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push('/(customer)/tickets')}
+              className="px-2 py-1 shrink-0"
+            >
+              <Text className="font-sans-semibold text-primary-500 text-sm">View All</Text>
+            </TouchableOpacity>
           )}
         </View>
 
-        {activeTickets.length > 0 ? (
-          activeTickets.slice(0, 3).map((ticket) => (
-            <TicketRow key={`active-${ticket.id}`} ticket={ticket} />
-          ))
-        ) : recentTickets.length > 0 ? (
-          recentTickets.map((ticket) => (
-            <TicketRow key={`recent-${ticket.id}`} ticket={ticket} />
+        {ticketsToShow.length > 0 ? (
+          ticketsToShow.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              onPress={() => router.push(`${basePath}/${ticket.id}`)}
+              cutoutColor="#F8FAFC"
+            />
           ))
         ) : (
-          /* Empty State */
-          <View className="bg-slate-100 rounded-3xl p-8 items-center border border-slate-200 border-dashed mt-2">
-            <Feather name="check-circle" size={40} color="#94a3b8" className="mb-3" />
-            <Text className="text-slate-900 font-bold text-base mb-1">You're all caught up</Text>
-            <Text className="text-slate-500 text-sm text-center">
-              No active support requests. Enjoy your seamless connection!
-            </Text>
-          </View>
+          <EmptyTicketsState />
         )}
       </View>
     </ScrollView>
