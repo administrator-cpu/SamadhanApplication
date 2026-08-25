@@ -7,6 +7,7 @@ export function useCustomers({ page = 1, limit = 10, search = '' } = {}) {
     queryKey: ['customers', { page, limit, search }],
     queryFn: () => userService.getCustomers({ page, limit, search: search || undefined }),
     placeholderData: (prev) => prev,
+    gcTime: 5 * 60 * 1000,
   });
 }
 
@@ -25,6 +26,7 @@ export function useMyConnections({ enabled = true } = {}) {
     queryKey: ['my-connections'],
     queryFn: userService.getMyConnections,
     staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     enabled,
   });
 }
@@ -48,6 +50,7 @@ export function useEmployees({ page = 1, limit = 10 } = {}) {
     queryKey: ['employees', { page, limit }],
     queryFn: () => userService.getEmployees({ page, limit }),
     placeholderData: (prev) => prev,
+    gcTime: 5 * 60 * 1000,
   });
 }
 

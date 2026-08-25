@@ -48,3 +48,10 @@ dist/
 web-build/
 *.log
 .env*.local
+
+
+Keystore password: 0d397d2f8146409edc3400bdb6c7902f
+    Key alias:         66eec312b8cc223318c855402cff0161
+    Key password:      5f586448db936a756765d26a561c34c6
+
+    Path to Keystore:  @harshjha047__samadhan.jks

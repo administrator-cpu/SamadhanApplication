@@ -1,22 +1,21 @@
-// app/_layout.jsx
-import { useEffect } from 'react';
-import { View, Text, ActivityIndicator, LogBox } from 'react-native';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { Feather } from '@expo/vector-icons';
-import { useAuthStore } from '../src/store/authStore';
-import { setOnSessionExpired } from '../src/api/client';
+import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { queryClient } from '../src/api/queryClient';
-import { usePushNotifications } from '../src/hooks/usePushNotifications';
+import { setOnSessionExpired } from '../src/api/client';
+import { useAuthStore } from '../src/store/authStore';
+import { queryClient, persistOptions } from '../src/api/queryClient';
 import '../global.css';
-import OfflineBanner from '../src/components/OfflineBanner';
 import InitializingScreen from '../src/components/InitializingScreen';
+import OfflineBanner from '../src/components/OfflineBanner';
+import { useBadgeCount } from '../src/hooks/useBadgeCount';
+import { useOfflineFlush } from '../src/hooks/useOfflineFlush';
+import { usePushNotifications } from '../src/hooks/usePushNotifications';
 
-// 1. ADDED: Import the specific font weights we need
-import { useFonts, Fraunces_500Medium } from '@expo-google-fonts/fraunces';
+import { Fraunces_500Medium, useFonts } from '@expo-google-fonts/fraunces';
 import { Karla_400Regular, Karla_600SemiBold } from '@expo-google-fonts/karla';
 
 LogBox.ignoreLogs([
@@ -36,10 +35,11 @@ const ROLE_GROUPS = ['(customer)', '(agent)', '(admin)', '(sales)'];
 
 function RootLayoutNav() {
   const { isInitializing, isAuthenticated, user, hydrate, clearAuth } = useAuthStore();
-  const router = useRouter();
+  
+  // FIX: Destructure exactly what we need so NativeWind's logger doesn't crash on the router object
+  const { replace } = useRouter(); 
   const segments = useSegments();
 
-  // 2. ADDED: Initialize the fonts
   const [fontsLoaded, fontError] = useFonts({
     Fraunces_500Medium,
     Karla_400Regular,
@@ -49,11 +49,13 @@ function RootLayoutNav() {
   useEffect(() => {
     setOnSessionExpired(() => {
       clearAuth();
-      router.replace('/(auth)/login');
+      replace('/(auth)/login'); // Updated
     });
-  }, [clearAuth, router]);
-  
+  }, [clearAuth, replace]);
+
   usePushNotifications();
+  useBadgeCount();
+  useOfflineFlush();
 
   useEffect(() => {
     hydrate();
@@ -73,7 +75,7 @@ function RootLayoutNav() {
     const homeRoute = ROLE_HOME_ROUTES[user?.role];
 
     if (!isAuthenticated) {
-      if (!inAuthGroup) router.replace('/(auth)/login');
+      if (!inAuthGroup) replace('/(auth)/login'); // Updated
       return;
     }
 
@@ -82,26 +84,25 @@ function RootLayoutNav() {
     }
 
     if (user?.must_change_password && !inForcedChangeScreen) {
-      router.replace('/(auth)/force-password-change');
+      replace('/(auth)/force-password-change'); // Updated
       return;
     }
 
     if (!user?.must_change_password && inForcedChangeScreen) {
-      router.replace(homeRoute);
+      replace(homeRoute); // Updated
       return;
     }
 
     if (inAuthGroup && !inForcedChangeScreen) {
-      router.replace(homeRoute);
+      replace(homeRoute); // Updated
       return;
     }
 
     if (inRoleGroup && `(${currentGroup.slice(1, -1)})` !== homeRoute.slice(1)) {
-      router.replace(homeRoute);
+      replace(homeRoute); // Updated
     }
-  }, [isAuthenticated, isInitializing, segments, user?.role, user?.must_change_password]);
+  }, [isAuthenticated, isInitializing, segments, user?.role, user?.must_change_password, replace]);
 
-  // 3. ADDED: Keep showing your premium loading screen until BOTH auth is ready AND fonts are loaded
   if (isInitializing || (!fontsLoaded && !fontError)) {
     return <InitializingScreen />;
   }
@@ -109,12 +110,12 @@ function RootLayoutNav() {
   return (
     <>
       <StatusBar style="auto" />
-       <OfflineBanner />
-      <Stack 
-        screenOptions={{ 
+      <OfflineBanner />
+      <Stack
+        screenOptions={{
           headerShown: false,
-          animation: 'fade_from_bottom', 
-          contentStyle: { backgroundColor: '#0f172a' } 
+          animation: 'fade_from_bottom',
+          contentStyle: { backgroundColor: '#0f172a' }
         }}
       >
         <Stack.Screen
@@ -133,9 +134,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
         <RootLayoutNav />
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </SafeAreaProvider>
   );
 }

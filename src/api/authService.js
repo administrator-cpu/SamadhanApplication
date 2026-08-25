@@ -3,7 +3,6 @@ import apiClient from './client';
 export const authService = {
   login: async (email, password) => {
     const { data } = await apiClient.post('/login', { email, password });
-    // Backend shape: { success, data: { user, accessToken, refreshToken } }
     return data.data;
   },
 

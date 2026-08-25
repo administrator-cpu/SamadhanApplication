@@ -1,76 +1,172 @@
 // src/components/TicketDetailScreen.js
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  TouchableOpacity,
-  Linking,
   Alert,
   Animated,
   Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-  PinchGestureHandler,
-  PanGestureHandler,
-  TapGestureHandler,
-  State,
   GestureHandlerRootView,
+  PanGestureHandler,
+  PinchGestureHandler,
+  State,
+  TapGestureHandler,
 } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// SDK 54+: FileSystem.downloadAsync (and the rest of the classic API used
-// below) moved to the legacy import path — the new default export uses
-// different File/Directory classes with a different API shape.
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-// SDK 54+: MediaLibrary.saveToLibraryAsync (and requestPermissionsAsync,
-// used below) moved to the legacy import path — the new default export
-// uses a different class-based API.
-import * as MediaLibrary from 'expo-media-library/legacy';
 
-import { getEventConfig, formatEventTime } from '../utils/eventType';
-import { statusLabel } from '../utils/ticketStatus';
 import { useTicket } from '../hooks/useTickets';
-import TicketStatusActions from './TicketStatusActions';
+import { useTicketSocket } from '../hooks/useTicketSocket';
+import { useAuthStore } from '../store/authStore';
+import { getEventConfig } from '../utils/eventType';
+import { STATUS_DOT_COLORS, statusLabel } from '../utils/ticketStatus';
 import TicketRating from './TicketRating';
 import TicketReplyForm from './TicketReplyForm';
 import TicketStaffTools from './TicketStaffTools';
-import { useTicketSocket } from '../hooks/useTicketSocket';
-import { useAuthStore } from '../store/authStore';
+import TicketStatusActions from './TicketStatusActions';
+import TicketRCAForm from './TicketRCAForm';
 
-
-// Solid dot colors per status — distinct from the pale STATUS_STYLES
-// backgrounds used elsewhere, since a dot needs to read at 8px.
-const STATUS_DOT_COLORS = {
-  OPEN: '#3B82F6',
-  IN_PROGRESS: '#F59E0B',
-  ESCALATED: '#EF4444',
-  RESOLVED: '#10B981',
-  CLOSED: '#94A3B8',
-  REOPENED: '#A855F7',
+/* ------------------------------------------------------------------
+   PALETTE — ink on white, one accent, one signal. Colour only in chips.
+------------------------------------------------------------------ */
+const C = {
+  ink: '#0C1524',
+  body: '#26313F',
+  muted: '#5C7291',
+  soft: '#6B7A93',
+  faint: '#8397B0',
+  hint: '#9AAAC0',
+  hair: '#EDF1F7',
+  chipGrey: '#F2F5F9',
+  surface: '#FFFFFF',
+  blue: '#1B72E8',
+  blueInk: '#1B5FC0',
+  blueDeep: '#2C5FA8',
+  blueTint: '#EAF2FE',
+  bubbleBlue: '#DCEBFC',
+  bubbleBlueMeta: '#6D8CB4',
+  green: '#188A62',
+  greenInk: '#1E6B50',
+  greenTint: '#DFF3EA',
+  bubbleGreen: '#DDEFE7',
+  bubbleGreenMeta: '#6E9384',
+  amber: '#D9722B',
+  amberTint: '#FEF1E7',
+  danger: '#C0392B',
+  dangerTint: '#FDECEA',
 };
 
+// Two grounds: live (ice blue) and resolved (mint). Everything else is shared.
+const GRADIENT = {
+  live: ['#FFFFFF', '#F4F9FF', '#E7F1FC'],
+  done: ['#FFFFFF', '#F5FBF8', '#E8F5EF'],
+};
+
+const SHADOW_CARD = {
+  shadowColor: '#1C365C',
+  shadowOpacity: 0.07,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 3,
+};
+
+const SHADOW_FLOAT = {
+  shadowColor: '#1C365C',
+  shadowOpacity: 0.09,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 5 },
+  elevation: 5,
+};
+
+const CHAT_EVENT_TYPES = [
+  'TICKET_CREATED',
+  'USER_REPLY',
+  'AGENT_REPLY',
+  'ADMIN_REPLY',
+  'INTERNAL_NOTE',
+];
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'avi', '3gp'];
+
+/* ---------------------------- time, in words ---------------------------- */
+
+function clockTime(dateString) {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 function formatFullDateTime(dateString) {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleString('en-US', {
+  if (!dateString) return 'Not available';
+  return new Date(dateString).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   });
 }
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function dayLabel(dateString) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const diff = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function dayKey(dateString) {
+  if (!dateString) return 'unknown';
+  const d = new Date(dateString);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+// "Yesterday, 5:12 PM" for the stat tile.
+function stampPhrase(dateString) {
+  if (!dateString) return '—';
+  return `${dayLabel(dateString)}, ${clockTime(dateString)}`;
+}
+
+function spanPhrase(from, to = Date.now()) {
+  if (!from) return null;
+  const mins = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60000));
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'}`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+/* ---------------------------- small utilities ---------------------------- */
 
 function getInitials(name) {
   return (
@@ -83,14 +179,13 @@ function getInitials(name) {
   );
 }
 
-// --- Attachment helpers (used by EventItem) ---
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
 function getAttachmentType(url) {
   if (!url) return 'document';
   const clean = url.split('?')[0].split('#')[0];
   const ext = clean.split('.').pop()?.toLowerCase();
-  return IMAGE_EXTENSIONS.includes(ext) ? 'image' : 'document';
+  if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
+  if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
+  return 'document';
 }
 
 function getAttachmentFileName(url) {
@@ -98,6 +193,15 @@ function getAttachmentFileName(url) {
   const clean = url.split('?')[0].split('#')[0];
   const segments = clean.split('/');
   return decodeURIComponent(segments[segments.length - 1] || 'Attachment');
+}
+
+function prettyFileName(url) {
+  const raw = getAttachmentFileName(url);
+  const dot = raw.lastIndexOf('.');
+  const stem = dot > 0 ? raw.slice(0, dot) : raw;
+  const ext = dot > 0 ? raw.slice(dot + 1).toUpperCase() : 'FILE';
+  const words = stem.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return { title: words.charAt(0).toUpperCase() + words.slice(1) || raw, ext };
 }
 
 async function ensureLocalCopy(url, fileName) {
@@ -110,159 +214,264 @@ async function ensureLocalCopy(url, fileName) {
 
 async function downloadAndOpenDocument(url, fileName) {
   const uri = await ensureLocalCopy(url, fileName);
-
   const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(uri);
-  } else {
-    Alert.alert('Downloaded', `Saved to ${uri}`);
-  }
+  if (canShare) await Sharing.shareAsync(uri);
+  else Alert.alert('Downloaded', `Saved to ${uri}`);
 }
 
+/* ------------------------------------------------------------------
+   STATUS → headline, ground, accent
+------------------------------------------------------------------ */
+function getTone(status) {
+  const s = status || 'OPEN';
+  if (s === 'RESOLVED' || s === 'CLOSED') {
+    return {
+      index: 2,
+      closed: true,
+      ground: GRADIENT.done,
+      accent: C.green,
+      accentInk: C.greenInk,
+      accentTint: C.greenTint,
+      bubble: C.bubbleGreen,
+      bubbleMeta: C.bubbleGreenMeta,
+      headline: 'All fixed',
+      pillText: C.greenInk,
+    };
+  }
+  if (s === 'ESCALATED') {
+    return {
+      index: 1,
+      closed: false,
+      ground: GRADIENT.live,
+      accent: C.danger,
+      accentInk: '#96271B',
+      accentTint: C.dangerTint,
+      bubble: C.bubbleBlue,
+      bubbleMeta: C.bubbleBlueMeta,
+      headline: 'Escalated to our\nsenior engineers',
+      pillText: '#96271B',
+    };
+  }
+  if (s === 'IN_PROGRESS' || s === 'REOPENED') {
+    return {
+      index: 1,
+      closed: false,
+      ground: GRADIENT.live,
+      accent: C.blue,
+      accentInk: C.blueInk,
+      accentTint: C.blueTint,
+      bubble: C.bubbleBlue,
+      bubbleMeta: C.bubbleBlueMeta,
+      headline: "We're on it,\nnothing needed from you",
+      pillText: C.blueDeep,
+    };
+  }
+  return {
+    index: 0,
+    closed: false,
+    ground: GRADIENT.live,
+    accent: C.blue,
+    accentInk: C.blueInk,
+    accentTint: C.blueTint,
+    bubble: C.bubbleBlue,
+    bubbleMeta: C.bubbleBlueMeta,
+    headline: "We've got your\nreport",
+    pillText: C.blueDeep,
+  };
+}
 
+function getSteps(status, agentName) {
+  const tone = getTone(status);
+  const agent = agentName && agentName !== 'Unassigned' ? agentName.split(' ')[0] : 'Our team';
+  const steps = [
+    { title: 'We received your report', note: "It's logged and nothing is lost." },
+    { title: `${agent} is looking into it`, note: 'Updates appear right here in this chat.' },
+    { title: 'We check it works with you', note: 'Then we close the ticket together.' },
+  ];
+  return steps.map((step, i) => ({
+    ...step,
+    state: i < tone.index ? 'done' : i === tone.index ? 'now' : 'later',
+  }));
+}
 
+/* ------------------------------------------------------------------
+   TIMELINE
+------------------------------------------------------------------ */
+function buildTimeline(events, currentUserId) {
+  const rows = [];
+  let lastDay = null;
+  let prevKind = null;
+  let prevSender = null;
+
+  (events || []).forEach((event) => {
+    const key = dayKey(event.created_at);
+    if (key !== lastDay) {
+      rows.push({ kind: 'day', id: `day-${key}`, label: dayLabel(event.created_at) });
+      lastDay = key;
+      prevKind = 'day';
+      prevSender = null;
+    }
+
+    if (!CHAT_EVENT_TYPES.includes(event.event_type)) {
+      rows.push({ kind: 'system', id: event.id, event });
+      prevKind = 'system';
+      prevSender = null;
+      return;
+    }
+
+    const isMe =
+      event.actor_user_id != null && String(event.actor_user_id) === String(currentUserId);
+    const sender = isMe ? '__me__' : String(event.actor_user_id ?? event.actor_name ?? 'system');
+    const runStart = prevKind !== 'message' || prevSender !== sender;
+
+    rows.push({ kind: 'message', id: event.id, event, isMe, runStart });
+    prevKind = 'message';
+    prevSender = sender;
+  });
+
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i].kind !== 'message') continue;
+    const next = rows[i + 1];
+    rows[i].runEnd = !next || next.kind !== 'message' || next.runStart;
+  }
+  return rows;
+}
+
+/* ==================================================================
+   SCREEN
+================================================================== */
 export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { data, isLoading, isError, error, refetch, isRefetching } = useTicket(id);
   const navigation = useNavigation();
+  const { data, isLoading, isError, error, refetch, isRefetching } = useTicket(id);
   const user = useAuthStore((state) => state.user);
   const insets = useSafeAreaInsets();
   useTicketSocket(id);
 
   const [isMenuVisible, setMenuVisible] = useState(false);
-  const [isContactModalVisible, setContactModalVisible] = useState(false);
+  const [isDetailsVisible, setDetailsVisible] = useState(false);
+  const [isRcaVisible, setRcaVisible] = useState(false);
+  const [isRcaDismissed, setRcaDismissed] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const scrollViewRef = useRef(null);
+  const scrollToBottom = (animated = true) => scrollViewRef.current?.scrollToEnd({ animated });
 
   const isCurrentUserCustomer = user?.role === 'USER';
+  const isStaff = user?.role === 'ADMIN' || user?.role === 'SUPPORT_AGENT';
+
+  // No nav bar at all — the chrome is two floating buttons over the gradient.
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
     const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
-
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setKeyboardVisible(true);
+      requestAnimationFrame(() => scrollToBottom(true));
+    });
     const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-
     return () => {
       showSub.remove();
       hideSub.remove();
     };
   }, []);
 
-  useLayoutEffect(() => {
-    if (data?.ticket) {
-      const ticket = data.ticket;
+  const ticket = data?.ticket;
+  const events = data?.events;
+  const tone = getTone(ticket?.status);
+  const timeline = useMemo(() => buildTimeline(events, user?.id), [events, user?.id]);
 
-      const chatPartnerName = isCurrentUserCustomer
-        ? ticket.assigned_employee?.name || 'Support Agent'
-        : ticket.customer?.name || 'Unknown Customer';
+  useEffect(() => {
+    if (timeline.length > 0) requestAnimationFrame(() => scrollToBottom(true));
+  }, [timeline.length]);
 
-      navigation.setOptions({
-        headerTitle: () => (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setContactModalVisible(true)}
-            className="max-w-[210px]"
-          >
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              className="font-sans-semibold text-text-primary text-base"
-            >
-              {chatPartnerName}
-            </Text>
-            <Text className="font-sans text-text-tertiary text-xs mt-0.5">
-              Ticket #{ticket.ticket_no}
-            </Text>
-          </TouchableOpacity>
-        ),
-        headerTitleAlign: 'left',
-        headerShadowVisible: false,
-        headerStyle: { backgroundColor: '#F8FAFC' },
-        headerRight: () => (
-          <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 8, marginRight: 4 }}>
-            <Feather name="more-vertical" size={24} color="#5C5348" />
-          </TouchableOpacity>
-        ),
-      });
-    }
-  }, [data?.ticket, navigation, isCurrentUserCustomer]);
+
+  const partnerName = isCurrentUserCustomer
+    ? ticket?.assigned_employee?.name || 'Support team'
+    : ticket?.customer?.name || 'Customer';
+  const agentName = ticket?.assigned_employee?.name || 'Unassigned';
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-slate-50 items-center justify-center p-6">
-        <ActivityIndicator size="large" color="#FF5A36" />
-      </View>
+      <Ground colors={GRADIENT.live}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={C.blue} />
+          <Text className="font-sans-medium" style={{ fontSize: 13, color: C.muted, marginTop: 14 }}>
+            Loading your conversation…
+          </Text>
+        </View>
+      </Ground>
     );
   }
 
   if (isError) {
     return (
-      <View className="flex-1 bg-slate-50 items-center justify-center p-6">
-        <Feather name="alert-circle" size={48} color="#E0311F" style={{ marginBottom: 16 }} />
-        <Text className="font-sans-semibold text-text-primary text-lg mb-2">
-          Oops! Something went wrong.
-        </Text>
-        <Text className="font-sans text-text-secondary text-center mb-6">
-          {error?.message || "We couldn't load this ticket."}
-        </Text>
-        <Pressable
-          onPress={() => refetch()}
-          className="bg-primary-500 px-6 py-3 rounded-full shadow-sm"
-        >
-          <Text className="font-sans-semibold text-white text-base">Try Again</Text>
-        </Pressable>
-      </View>
+      <Ground colors={GRADIENT.live}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 }}>
+          <View
+            style={{
+              width: 62,
+              height: 62,
+              borderRadius: 20,
+              backgroundColor: C.dangerTint,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+            }}
+          >
+            <Feather name="wifi-off" size={26} color={C.danger} />
+          </View>
+          <Text
+            className="font-sans-semibold"
+            style={{ fontSize: 20, letterSpacing: -0.4, color: C.ink, marginBottom: 8, textAlign: 'center' }}
+          >
+            We couldn't load this chat
+          </Text>
+          <Text
+            className="font-sans-medium"
+            style={{ fontSize: 13.5, lineHeight: 21, color: C.muted, textAlign: 'center', marginBottom: 26 }}
+          >
+            {error?.message || 'Your ticket is safe — this is just a connection hiccup.'}
+          </Text>
+          <Pressable
+            onPress={() => refetch()}
+            style={{ backgroundColor: C.ink, paddingHorizontal: 28, height: 50, borderRadius: 999, justifyContent: 'center' }}
+          >
+            <Text className="font-sans-semibold" style={{ fontSize: 15, color: '#FFFFFF' }}>
+              Try again
+            </Text>
+          </Pressable>
+        </View>
+      </Ground>
     );
   }
 
-  const { ticket, events } = data || {};
+  const openFor = spanPhrase(ticket?.created_at);
+  const fixedIn = ticket?.created_at && ticket?.updated_at ? spanPhrase(ticket.created_at, ticket.updated_at) : null;
+  const statusPill = tone.closed
+    ? `Ticket #${ticket?.ticket_no} · closed ${spanPhrase(ticket?.updated_at)} ago`
+    : `Ticket #${ticket?.ticket_no} · open ${openFor}`;
+
+  const subline = tone.closed
+    ? [ticket?.subject, fixedIn && `fixed in ${fixedIn}`].filter(Boolean).join(' · ')
+    : ticket?.subject || 'We will update you here';
 
   const contactPerson = isCurrentUserCustomer ? ticket?.assigned_employee : ticket?.customer;
-  const contactName = isCurrentUserCustomer
-    ? ticket?.assigned_employee?.name || 'Support Agent'
-    : ticket?.customer?.name || 'Unknown Customer';
-  const contactInitials = getInitials(contactName);
-  const contactSubtitle = isCurrentUserCustomer
-    ? contactPerson?.role || 'Support Agent'
-    : `Ticket #${ticket?.ticket_no || 'N/A'}`;
-
   const contactRows = (
     isCurrentUserCustomer
       ? [
           contactPerson?.role && { icon: 'briefcase', label: 'Role', value: contactPerson.role },
-          contactPerson?.email && {
-            icon: 'mail',
-            label: 'Email',
-            value: contactPerson.email,
-            action: 'email',
-          },
-          contactPerson?.phone && {
-            icon: 'phone',
-            label: 'Phone',
-            value: contactPerson.phone,
-            action: 'phone',
-          },
+          contactPerson?.email && { icon: 'mail', label: 'Email', value: contactPerson.email, action: 'email' },
+          contactPerson?.phone && { icon: 'phone', label: 'Phone', value: contactPerson.phone, action: 'phone' },
         ]
       : [
-          contactPerson?.email && {
-            icon: 'mail',
-            label: 'Email',
-            value: contactPerson.email,
-            action: 'email',
-          },
-          contactPerson?.phone && {
-            icon: 'phone',
-            label: 'Phone',
-            value: contactPerson.phone,
-            action: 'phone',
-          },
+          contactPerson?.email && { icon: 'mail', label: 'Email', value: contactPerson.email, action: 'email' },
+          contactPerson?.phone && { icon: 'phone', label: 'Phone', value: contactPerson.phone, action: 'phone' },
           contactPerson?.company && { icon: 'briefcase', label: 'Company', value: contactPerson.company },
-          contactPerson?.customer_id && {
-            icon: 'hash',
-            label: 'Customer ID',
-            value: contactPerson.customer_id,
-          },
+          contactPerson?.customer_id && { icon: 'hash', label: 'Customer ID', value: contactPerson.customer_id },
         ]
   ).filter(Boolean);
 
@@ -279,113 +488,240 @@ export default function TicketDetailScreen() {
   };
 
   const ticketInfoRows = [
+    { icon: 'file-text', label: 'What you reported', value: ticket?.subject || 'No subject' },
     { icon: 'activity', label: 'Status', isStatus: true },
-    ticket?.circuit_description && {
-      icon: 'zap',
-      label: 'Circuit ID',
-      value: ticket.circuit_description,
-    },
-    { icon: 'calendar', label: 'Opened On', value: formatFullDateTime(ticket?.created_at) },
-    { icon: 'clock', label: 'Last Updated', value: formatFullDateTime(ticket?.updated_at) },
+    ticket?.circuit_description && { icon: 'zap', label: 'Your line', value: ticket.circuit_description },
+    { icon: 'calendar', label: 'Reported on', value: formatFullDateTime(ticket?.created_at) },
+    { icon: 'clock', label: 'Last update', value: formatFullDateTime(ticket?.updated_at) },
   ].filter(Boolean);
 
-  const showAgentSection = !isCurrentUserCustomer;
-  const agentName = ticket?.assigned_employee?.name || 'Unassigned';
-  const agentInitials = getInitials(agentName);
-  const agentRole = ticket?.assigned_employee?.role || 'Support Agent';
-
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 100}
-    >
-      <ScrollView
-        className="flex-1 bg-slate-50"
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5A36" />}
+    <Ground colors={tone.ground}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <View className="bg-surface px-4 pt-4 pb-4 border-b border-border/40 mb-3">
-          <Text className="font-sans-semibold text-text-primary text-base mb-1" numberOfLines={1}>
-            {ticket?.subject || 'No Subject'}
-          </Text>
-          {ticket?.circuit_description && (
-            <Text className="font-sans text-text-secondary text-sm leading-5" numberOfLines={2}>
-              {ticket.circuit_description}
-            </Text>
-          )}
+        {/* FLOATING CHROME — the only pinned elements */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingTop: insets.top + 8,
+            paddingHorizontal: 14,
+            paddingBottom: 2,
+          }}
+        >
+          <RoundButton icon="arrow-left" onPress={() => router.back()} />
 
-          <View className="h-px bg-bg-subtle my-3" />
-
-          <TicketLiveTracker ticket={ticket} />
-        </View>
-
-        {ticket?.rca && (
-          <View className="bg-surface mx-4 mb-4 p-4 rounded-2xl border border-border/40 shadow-sm">
-            <View className="flex-row items-center mb-2.5">
-              <View className="bg-success-bg p-1.5 rounded-lg mr-2">
-                <Feather name="search" size={14} color="#0F9D58" />
-              </View>
-              <Text className="font-sans-semibold text-success-text text-sm">
-                Root Cause Analysis
+          {/* IDENTITY PILL — who + which ticket, opens the details sheet */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setDetailsVisible(true)}
+            style={[
+              {
+                flex: 1,
+                marginHorizontal: 9,
+                height: 52,
+                borderRadius: 999,
+                backgroundColor: C.surface,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingLeft: 7,
+                paddingRight: 12,
+                gap: 10,
+              },
+              SHADOW_FLOAT,
+            ]}
+          >
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 999,
+                backgroundColor: tone.accentTint,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text className="font-sans-semibold" style={{ fontSize: 13, color: tone.accentInk }}>
+                {getInitials(partnerName)}
               </Text>
             </View>
-            <Text className="font-sans text-text-primary text-sm leading-6">{ticket.rca}</Text>
-            {ticket.rca_images?.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
-                {ticket.rca_images.map((url) => (
-                  <Image
-                    key={url}
-                    source={{ uri: url }}
-                    className="w-[70px] h-[70px] rounded-lg mr-2.5 bg-bg-subtle"
-                  />
-                ))}
-              </ScrollView>
-            )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+                {partnerName}
+              </Text>
+              <Text numberOfLines={1} className="font-sans-medium" style={{ fontSize: 11, color: C.soft, marginTop: 2 }}>
+                {[`#${ticket?.ticket_no || '—'}`, statusLabel(ticket?.status), !isCurrentUserCustomer && ticket?.priority]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+            <Feather name="chevron-down" size={16} color={C.faint} />
+          </TouchableOpacity>
+
+          <RoundButton icon="more-vertical" onPress={() => setMenuVisible(true)} />
+        </View>
+
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scrollToBottom(true)}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={tone.accent} />}
+        >
+          {/* HEADLINE — scrolls away with the thread */}
+          <View style={{ alignItems: 'center', paddingHorizontal: 6, paddingBottom: 6 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 7,
+                backgroundColor: 'rgba(255,255,255,0.72)',
+                borderRadius: 999,
+                paddingHorizontal: 13,
+                paddingVertical: 6,
+              }}
+            >
+              {tone.closed ? (
+                <Feather name="check" size={12} color={C.green} />
+              ) : (
+                <LivePulse color={tone.accent} />
+              )}
+              <Text className="font-sans-semibold" style={{ fontSize: 11.5, color: tone.pillText }}>
+                {statusPill}
+              </Text>
+            </View>
+
+            <Text
+              className="font-sans-semibold"
+              style={{
+                fontSize: 27,
+                lineHeight: 32,
+                letterSpacing: -0.8,
+                color: C.ink,
+                textAlign: 'center',
+                marginTop: 13,
+              }}
+            >
+              {tone.headline}
+            </Text>
+
+            <Text
+              className="font-sans-medium"
+              style={{ fontSize: 13, lineHeight: 19.5, color: C.muted, textAlign: 'center', marginTop: 9 }}
+            >
+              {subline}
+            </Text>
           </View>
-        )}
 
-        <TicketRating ticket={ticket} />
+          {/* TWO-UP STATS */}
+          <View style={{ flexDirection: 'row', gap: 11, marginTop: 18, marginBottom: 13 }}>
+            <StatTile
+              icon="wifi"
+              tint={C.blueTint}
+              iconColor={C.blue}
+              title="Your line"
+              value={ticket?.circuit_description || 'Not specified'}
+            />
+            <StatTile
+              icon="clock"
+              tint={C.amberTint}
+              iconColor={C.amber}
+              title="Reported"
+              value={stampPhrase(ticket?.created_at)}
+            />
+          </View>
 
-        {/* --- CONVERSATION TIMELINE ---
-            Plain View for now — the ImageBackground texture is on hold
-            until there's a real asset; a flat #F0F2F5 (WhatsApp Web's
-            chat gray) reads far cleaner than a muddy untextured beige. */}
-        <View className="px-4 pt-2 pb-2" style={{ backgroundColor: '#F0F2F5' }}>
-          {!events || events.length === 0 ? (
-            <View className="items-center py-10">
-              <Text className="font-sans text-text-tertiary text-sm">Conversation starting...</Text>
+          {/* WHAT HAPPENS NEXT — live tickets only */}
+          {!tone.closed ? (
+            <StepsCard steps={getSteps(ticket?.status, isCurrentUserCustomer ? agentName : null)} accent={tone.accent} />
+          ) : null}
+
+          {/* THREAD */}
+          {timeline.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 30 }}>
+              <Text className="font-sans-medium" style={{ fontSize: 13.5, color: C.faint }}>
+                No messages yet — say hello below.
+              </Text>
             </View>
           ) : (
-            events.map((event) => <EventItem key={event.id} event={event} ticket={ticket} />)
+            timeline.map((row) => {
+              if (row.kind === 'day') return <DayDivider key={row.id} label={row.label} />;
+              if (row.kind === 'system') return <SystemPill key={row.id} event={row.event} />;
+              return (
+                <MessageBubble
+                  key={row.id}
+                  event={row.event}
+                  isMe={row.isMe}
+                  runStart={row.runStart}
+                  runEnd={row.runEnd}
+                  tone={tone}
+                />
+              );
+            })
+          )}
+
+          {/* OUTCOME + RATING at the end, the way a conversation ends */}
+          {tone.closed ? <OutcomeCard ticket={ticket} fixedIn={fixedIn} /> : null}
+          <TicketRating ticket={ticket} />
+        </ScrollView>
+
+        {/* FLOATING COMPOSER / RCA PROMPT / CLOSED CARD */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 6,
+            paddingBottom: isKeyboardVisible ? 8 : insets.bottom + 8,
+            gap: 11,
+          }}
+        >
+          {/* Resolved or closed + staff + no RCA yet → write it right here */}
+          {tone.closed && isStaff && !ticket?.rca && !isRcaDismissed && !isKeyboardVisible ? (
+            <RcaPrompt onWrite={() => setRcaVisible(true)} onLater={() => setRcaDismissed(true)} />
+          ) : null}
+
+          {tone.closed && !isStaff ? (
+            <ClosedCard onReopen={() => setMenuVisible(true)} />
+          ) : (
+            <View style={[{ backgroundColor: C.surface, borderRadius: 26, paddingHorizontal: 6, paddingVertical: 4 }, SHADOW_FLOAT]}>
+              <TicketReplyForm ticket={ticket} />
+            </View>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAvoidingView>
 
-      <View className="bg-slate-50" style={{ paddingBottom: isKeyboardVisible ? 0 : insets.bottom }}>
-        <TicketReplyForm ticket={ticket} />
-      </View>
-
-      <Modal
-        visible={isMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
+      {/* MANAGE SHEET */}
+      <Modal visible={isMenuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
         <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(36,31,26,0.4)', justifyContent: 'flex-end' }}
+          style={{ flex: 1, backgroundColor: 'rgba(12,21,36,0.38)', justifyContent: 'flex-end' }}
           activeOpacity={1}
           onPress={() => setMenuVisible(false)}
         >
           <TouchableOpacity
             activeOpacity={1}
-            className="bg-surface rounded-t-3xl px-5 pb-10 pt-3"
-            style={{ maxHeight: '80%' }}
+            style={{
+              backgroundColor: C.surface,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              paddingHorizontal: 18,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 26,
+              maxHeight: '82%',
+            }}
           >
-            <View className="w-10 h-1 bg-border-strong rounded-full self-center mb-4" />
-            <Text className="font-sans-semibold text-text-primary text-base text-center mb-4">
-              Manage Ticket
+            <View
+              style={{ width: 40, height: 4, borderRadius: 999, backgroundColor: '#DEE5EE', alignSelf: 'center', marginBottom: 18 }}
+            />
+            <Text className="font-sans-semibold" style={{ fontSize: 16, letterSpacing: -0.3, color: C.ink, textAlign: 'center' }}>
+              What would you like to do?
+            </Text>
+            <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, textAlign: 'center', marginTop: 5, marginBottom: 18 }}>
+              Nothing here sends a message on its own.
             </Text>
 
             <TicketStatusActions ticket={ticket} />
@@ -394,209 +730,560 @@ export default function TicketDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <Modal
-        visible={isContactModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setContactModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/40 justify-center p-5">
-          <View
-            className="bg-white rounded-3xl p-6 shadow-xl"
-            style={{ maxHeight: '85%' }}
-          >
+      {/* DETAILS SHEET */}
+      <Modal visible={isDetailsVisible} transparent animationType="fade" onRequestClose={() => setDetailsVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(12,21,36,0.38)', justifyContent: 'center', padding: 18 }}>
+          <View style={{ backgroundColor: C.surface, borderRadius: 30, padding: 22, maxHeight: '86%' }}>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => setContactModalVisible(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 items-center justify-center z-10"
+              onPress={() => setDetailsVisible(false)}
+              style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
             >
-              <Feather name="x" size={16} color="#334155" />
+              <View
+                style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.chipGrey, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Feather name="x" size={16} color={C.body} />
+              </View>
             </TouchableOpacity>
 
-            <View className="items-center">
-              <View className="w-24 h-24 rounded-full bg-slate-100 items-center justify-center">
-                <Text className="font-sans-semibold text-slate-500 text-3xl">
-                  {contactInitials}
+            <View style={{ alignItems: 'center', paddingTop: 8 }}>
+              <View
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: 26,
+                  backgroundColor: tone.accentTint,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text className="font-sans-semibold" style={{ fontSize: 24, color: tone.accentInk }}>
+                  {getInitials(partnerName)}
                 </Text>
               </View>
-              <Text className="text-2xl font-bold text-text-primary mt-4 text-center">
-                {contactName}
+              <Text
+                className="font-sans-semibold"
+                style={{ fontSize: 20, letterSpacing: -0.4, color: C.ink, marginTop: 14, textAlign: 'center' }}
+              >
+                {partnerName}
               </Text>
-              <Text className="font-sans text-text-tertiary text-sm mt-1">{contactSubtitle}</Text>
+              <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
+                {isCurrentUserCustomer ? contactPerson?.role || 'Your support agent' : `Ticket #${ticket?.ticket_no || '—'}`}
+              </Text>
             </View>
 
-            <ScrollView
-              style={{ flexShrink: 1, marginVertical: 16 }}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text className="font-sans-semibold text-text-tertiary text-[11px] uppercase tracking-wide ml-1 mb-2">
-                Contact Info
-              </Text>
-              <View className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                {contactRows.length > 0 ? (
-                  contactRows.map((row, index) => {
-                    const isActionable = row.action === 'email' || row.action === 'phone';
-                    const RowWrapper = isActionable ? TouchableOpacity : View;
-                    return (
-                      <RowWrapper
-                        key={row.label}
-                        {...(isActionable
-                          ? { activeOpacity: 0.6, onPress: () => handleContactAction(row) }
-                          : {})}
-                        className={`flex-row items-center py-3 ${
-                          index > 0 ? 'border-t border-slate-100' : ''
-                        }`}
-                      >
-                        <View className="w-9 h-9 rounded-full bg-primary-50 items-center justify-center mr-3">
-                          <Feather name={row.icon} size={16} color="#C0703A" />
-                        </View>
-                        <View className="flex-1">
-                          <Text className="font-sans text-text-tertiary text-[11px] uppercase tracking-wide">
-                            {row.label}
-                          </Text>
-                          <Text
-                            className="font-sans-semibold text-text-primary text-sm mt-0.5"
-                            numberOfLines={1}
-                          >
-                            {row.value}
-                          </Text>
-                        </View>
-                        {isActionable && (
-                          <Feather name="chevron-right" size={18} color="#C7C0B4" />
-                        )}
-                      </RowWrapper>
-                    );
-                  })
-                ) : (
-                  <Text className="font-sans text-text-tertiary text-sm text-center py-2">
-                    No additional contact details available.
-                  </Text>
-                )}
-              </View>
-
-              <Text className="font-sans-semibold text-text-tertiary text-[11px] uppercase tracking-wide ml-1 mb-2 mt-5">
-                Ticket Info
-              </Text>
-              <View className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                {ticketInfoRows.map((row, index) => (
-                  <View
-                    key={row.label}
-                    className={`flex-row items-center py-3 ${
-                      index > 0 ? 'border-t border-slate-100' : ''
-                    }`}
-                  >
-                    <View className="w-9 h-9 rounded-full bg-primary-50 items-center justify-center mr-3">
-                      <Feather name={row.icon} size={16} color="#C0703A" />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="font-sans text-text-tertiary text-[11px] uppercase tracking-wide">
-                        {row.label}
-                      </Text>
-                      {row.isStatus ? (
-                        <View className="flex-row items-center mt-0.5">
-                          <View
-                            className="w-2 h-2 rounded-full mr-1.5"
-                            style={{
-                              backgroundColor: STATUS_DOT_COLORS[ticket?.status] || '#94A3B8',
-                            }}
-                          />
-                          <Text className="font-sans-semibold text-text-primary text-sm">
-                            {statusLabel(ticket?.status)}
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text
-                          className="font-sans-semibold text-text-primary text-sm mt-0.5"
-                          numberOfLines={2}
-                        >
-                          {row.value}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-
-              {showAgentSection && (
+            <ScrollView style={{ flexShrink: 1, marginVertical: 18 }} showsVerticalScrollIndicator={false}>
+              {contactRows.length > 0 ? (
                 <>
-                  <Text className="font-sans-semibold text-text-tertiary text-[11px] uppercase tracking-wide ml-1 mb-2 mt-5">
-                    Assigned Agent
-                  </Text>
-                  <View className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                    <View className="flex-row items-center">
-                      <View className="w-12 h-12 rounded-full bg-slate-100 items-center justify-center mr-3">
-                        <Text className="font-sans-semibold text-slate-500 text-base">
-                          {agentInitials}
+                  <SheetLabel>Reach them directly</SheetLabel>
+                  <InfoGroup>
+                    {contactRows.map((row, index) => (
+                      <InfoRow
+                        key={row.label}
+                        row={row}
+                        first={index === 0}
+                        onPress={row.action ? () => handleContactAction(row) : null}
+                      />
+                    ))}
+                  </InfoGroup>
+                </>
+              ) : null}
+
+              <SheetLabel style={{ marginTop: contactRows.length ? 20 : 0 }}>This ticket</SheetLabel>
+              <InfoGroup>
+                {ticketInfoRows.map((row, index) => (
+                  <InfoRow key={row.label} row={row} first={index === 0} status={ticket?.status} />
+                ))}
+              </InfoGroup>
+
+              {!isCurrentUserCustomer ? (
+                <>
+                  <SheetLabel style={{ marginTop: 20 }}>Assigned agent</SheetLabel>
+                  <InfoGroup>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13 }}>
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 15,
+                          backgroundColor: C.blueTint,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12,
+                        }}
+                      >
+                        <Text className="font-sans-semibold" style={{ fontSize: 14.5, color: C.blueInk }}>
+                          {getInitials(agentName)}
                         </Text>
                       </View>
-                      <View className="flex-1">
-                        <Text
-                          className="font-sans-semibold text-text-primary text-sm"
-                          numberOfLines={1}
-                        >
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} className="font-sans-semibold" style={{ fontSize: 14, color: C.ink }}>
                           {agentName}
                         </Text>
-                        <Text
-                          className="font-sans text-text-tertiary text-xs mt-0.5"
-                          numberOfLines={1}
-                        >
-                          {agentRole}
+                        <Text numberOfLines={1} className="font-sans-medium" style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                          {ticket?.assigned_employee?.role || 'Support agent'}
                         </Text>
                       </View>
                     </View>
-                  </View>
+                  </InfoGroup>
                 </>
-              )}
+              ) : null}
+
+              {/* RCA — second entry point, reachable after dismissing the prompt */}
+              {isStaff && tone.closed ? (
+                <>
+                  <SheetLabel style={{ marginTop: 20 }}>Root cause analysis</SheetLabel>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setDetailsVisible(false);
+                      setRcaVisible(true);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      backgroundColor: C.amberTint,
+                      borderRadius: 20,
+                      paddingHorizontal: 16,
+                      paddingVertical: 15,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 12,
+                        backgroundColor: '#FBE4D2',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Feather name="edit-3" size={16} color={C.amber} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.ink }}>
+                        {ticket?.rca ? 'Edit the analysis' : 'Write the analysis'}
+                      </Text>
+                      <Text className="font-sans-medium" style={{ fontSize: 11.5, color: '#8A6A52', marginTop: 2 }}>
+                        {ticket?.rca ? 'Written · visible to the customer' : 'Not written yet'}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color="#D3B69E" />
+                  </TouchableOpacity>
+                </>
+              ) : null}
             </ScrollView>
 
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => setContactModalVisible(false)}
-              className="bg-primary-500 rounded-full py-3.5 items-center shadow-sm"
+              onPress={() => setDetailsVisible(false)}
+              style={{ backgroundColor: C.ink, borderRadius: 999, height: 50, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text className="font-sans-semibold text-white text-base">Close</Text>
+              <Text className="font-sans-semibold" style={{ fontSize: 15, color: '#FFFFFF' }}>
+                Back to chat
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+
+      {/* RCA SHEET — agent and admin, on a resolved or closed ticket */}
+      <Modal visible={isRcaVisible} transparent animationType="fade" onRequestClose={() => setRcaVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(12,21,36,0.38)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: C.surface,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              paddingHorizontal: 18,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 20,
+              maxHeight: '88%',
+            }}
+          >
+            <View
+              style={{ width: 40, height: 4, borderRadius: 999, backgroundColor: '#DEE5EE', alignSelf: 'center', marginBottom: 16 }}
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flex: 1 }}>
+                <Text className="font-sans-semibold" style={{ fontSize: 16, letterSpacing: -0.3, color: C.ink }}>
+                  Root cause analysis
+                </Text>
+                <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
+                  What went wrong and what you did. The customer sees this.
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setRcaVisible(false)}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 999,
+                    backgroundColor: C.chipGrey,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Feather name="x" size={16} color={C.body} />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TicketRCAForm ticket={ticket} onDone={() => setRcaVisible(false)} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </Ground>
   );
 }
 
-// ------------------------------------------------------------------
-// EVENT ITEM COMPONENT — WhatsApp-style chat timeline
-// ------------------------------------------------------------------
-function EventItem({ event, ticket }) {
+/* ------------------------------------------------------------------
+   GROUND — the gradient every screen state sits on
+------------------------------------------------------------------ */
+function Ground({ colors, children }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: colors[0] }}>
+      <LinearGradient colors={colors} locations={[0, 0.34, 1]} style={StyleSheet.absoluteFill} />
+      {children}
+    </View>
+  );
+}
+
+function RoundButton({ icon, onPress }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={[
+        {
+          width: 46,
+          height: 46,
+          borderRadius: 999,
+          backgroundColor: C.surface,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        SHADOW_FLOAT,
+      ]}
+    >
+      <Feather name={icon} size={19} color="#101828" />
+    </TouchableOpacity>
+  );
+}
+
+function LivePulse({ color }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1100, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={{ width: 8, height: 8, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
+          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
+        }}
+      />
+      <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: color }} />
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------
+   CARDS
+------------------------------------------------------------------ */
+function StatTile({ icon, tint, iconColor, title, value }) {
+  return (
+    <View style={[{ flex: 1, backgroundColor: C.surface, borderRadius: 20, padding: 15 }, SHADOW_CARD]}>
+      <View
+        style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: tint, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Feather name={icon} size={16} color={iconColor} />
+      </View>
+      <Text className="font-sans-semibold" style={{ fontSize: 13.5, color: C.ink, marginTop: 12 }}>
+        {title}
+      </Text>
+      <Text numberOfLines={2} className="font-sans-medium" style={{ fontSize: 12, lineHeight: 16, color: C.muted, marginTop: 3 }}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function StepsCard({ steps, accent }) {
+  return (
+    <View style={[{ backgroundColor: C.surface, borderRadius: 22, padding: 18, marginBottom: 16 }, SHADOW_CARD]}>
+      <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.ink, marginBottom: 16 }}>
+        What happens next
+      </Text>
+
+      {steps.map((step, index) => {
+        const isLast = index === steps.length - 1;
+        const done = step.state === 'done';
+        const now = step.state === 'now';
+        return (
+          <View key={step.title} style={{ flexDirection: 'row', gap: 13 }}>
+            <View style={{ width: 22, alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 999,
+                  backgroundColor: done ? C.greenTint : now ? C.blueTint : C.chipGrey,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {done ? <Feather name="check" size={11} color={C.green} /> : null}
+                {now ? <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: accent }} /> : null}
+              </View>
+              {!isLast ? <View style={{ flex: 1, width: 2, backgroundColor: C.hair, marginVertical: 4 }} /> : null}
+            </View>
+
+            <View style={{ flex: 1, paddingBottom: isLast ? 0 : 16 }}>
+              <Text
+                className={now ? 'font-sans-semibold' : 'font-sans-medium'}
+                style={{ fontSize: 13.5, lineHeight: 19, color: now || done ? C.ink : C.muted }}
+              >
+                {step.title}
+              </Text>
+              <Text
+                className={now ? 'font-sans-semibold' : 'font-sans-medium'}
+                style={{ fontSize: 12, lineHeight: 18, color: now ? accent : C.soft, marginTop: 3 }}
+              >
+                {step.note}
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function OutcomeCard({ ticket, fixedIn }) {
+  if (!ticket?.rca && !ticket?.rca_images?.length) return null;
+  return (
+    <View style={[{ backgroundColor: C.surface, borderRadius: 22, overflow: 'hidden', marginTop: 14 }, SHADOW_CARD]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingTop: 17 }}>
+        <View
+          style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.greenTint, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Feather name="search" size={16} color={C.green} />
+        </View>
+        <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+          What went wrong
+        </Text>
+      </View>
+
+      {ticket.rca ? (
+        <View style={{ paddingHorizontal: 18, paddingTop: 15 }}>
+          <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.soft, marginBottom: 5 }}>
+            Cause and fix
+          </Text>
+          <Text className="font-sans" style={{ fontSize: 13.5, lineHeight: 21, color: C.body }}>
+            {ticket.rca}
+          </Text>
+        </View>
+      ) : null}
+
+      {ticket.rca_images?.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 15, paddingLeft: 18 }}>
+          {ticket.rca_images.map((url) => (
+            <Image
+              key={url}
+              source={{ uri: url }}
+              style={{ width: 56, height: 56, borderRadius: 14, marginRight: 9, backgroundColor: C.chipGrey }}
+              contentFit="cover"
+              cachePolicy="disk"
+            />
+          ))}
+        </ScrollView>
+      ) : null}
+
+      <View style={{ paddingHorizontal: 18, paddingTop: 15, paddingBottom: 18 }}>
+        <View style={{ height: 1, backgroundColor: C.hair, marginBottom: 13 }} />
+        <Text className="font-sans-medium" style={{ fontSize: 12, color: C.muted }}>
+          {fixedIn ? `Fixed in ${fixedIn} from when you reported it.` : 'Marked as resolved by our team.'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function RcaPrompt({ onWrite, onLater }) {
+  return (
+    <View style={[{ backgroundColor: C.surface, borderRadius: 22, padding: 16 }, SHADOW_FLOAT]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+        <View
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 12,
+            backgroundColor: C.amberTint,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Feather name="edit-3" size={17} color={C.amber} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+            Root cause analysis pending
+          </Text>
+          <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.soft, marginTop: 2 }}>
+            Needed before this ticket closes
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 9, marginTop: 14 }}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onWrite}
+          style={{ flex: 1, height: 46, borderRadius: 999, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text className="font-sans-semibold" style={{ fontSize: 13, color: '#FFFFFF' }}>
+            Write RCA
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onLater}
+          style={{
+            height: 46,
+            paddingHorizontal: 18,
+            borderRadius: 999,
+            backgroundColor: C.chipGrey,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.body }}>
+            Later
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function ClosedCard({ onReopen }) {
+  return (
+    <View
+      style={[
+        { flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: C.surface, borderRadius: 22, padding: 14 },
+        SHADOW_FLOAT,
+      ]}
+    >
+      <Feather name="lock" size={17} color={C.faint} />
+      <View style={{ flex: 1 }}>
+        <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.body }}>
+          This conversation is closed
+        </Text>
+        <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.soft, marginTop: 2 }}>
+          Reopen it if the problem comes back
+        </Text>
+      </View>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onReopen}
+        style={{ height: 44, justifyContent: 'center', paddingHorizontal: 18, borderRadius: 999, backgroundColor: C.blueTint }}
+      >
+        <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.blueInk }}>
+          Reopen
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------
+   THREAD FURNITURE
+------------------------------------------------------------------ */
+function DayDivider({ label }) {
+  return (
+    <View
+      style={{
+        alignSelf: 'center',
+        backgroundColor: 'rgba(255,255,255,0.7)',
+        borderRadius: 999,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        marginVertical: 12,
+      }}
+    >
+      <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.muted }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function SystemPill({ event }) {
   const config = getEventConfig(event.event_type);
+  return (
+    <View style={{ alignItems: 'center', marginVertical: 9, paddingHorizontal: 16 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 8,
+          backgroundColor: 'rgba(255,255,255,0.7)',
+          borderRadius: 20,
+          paddingHorizontal: 15,
+          paddingVertical: 8,
+        }}
+      >
+        <Feather name={config.icon || 'info'} size={12} color={C.muted} style={{ marginTop: 2 }} />
+        <Text className="font-sans-medium" style={{ fontSize: 12, lineHeight: 17, color: C.muted, flexShrink: 1 }}>
+          {event.actor_name ? (
+            <Text className="font-sans-semibold" style={{ color: C.body }}>
+              {event.actor_name}{' '}
+            </Text>
+          ) : null}
+          {event.message || config.label}
+          <Text>{`  ·  ${clockTime(event.created_at)}`}</Text>
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
   const attachments = event.metadata?.attachments || [];
-  const imageAttachments = attachments.filter((url) => getAttachmentType(url) === 'image');
-  const documentAttachments = attachments.filter((url) => getAttachmentType(url) === 'document');
-
-  // Fixed: the real event types (per BACKEND_SCHEMA.md) are USER_REPLY /
-  // AGENT_REPLY / ADMIN_REPLY / INTERNAL_NOTE — 'CUSTOMER_REPLY', 'NOTE',
-  // and 'MESSAGE' were never real event_type values, so every reply
-  // except TICKET_CREATED/AGENT_REPLY was silently falling through to
-  // the system-log branch below instead of rendering as a chat bubble.
-  const chatEventTypes = ['TICKET_CREATED', 'USER_REPLY', 'AGENT_REPLY', 'ADMIN_REPLY', 'INTERNAL_NOTE'];
-  const isMessage = chatEventTypes.includes(event.event_type);
-
-  const currentUser = useAuthStore((state) => state.user);
-  // ticket_events has no `user_id`/`email` column — the real FK is
-  // `actor_user_id` (BACKEND_SCHEMA.md). String-normalized since the
-  // event's id may come through as a number while the auth user's id
-  // may be a uuid/string, depending on role.
-  const isMe = event.actor_user_id != null && String(event.actor_user_id) === String(currentUser?.id);
-  const alignRight = isMe;
+  const images = attachments.filter((url) => getAttachmentType(url) === 'image');
+  const videos = attachments.filter((url) => getAttachmentType(url) === 'video');
+  const documents = attachments.filter((url) => getAttachmentType(url) === 'document');
 
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const [downloadingUrl, setDownloadingUrl] = useState(null);
 
-  const handleDocumentPress = async (url) => {
+  const handleFilePress = async (url) => {
     if (downloadingUrl) return;
-    const fileName = getAttachmentFileName(url);
     try {
       setDownloadingUrl(url);
-      await downloadAndOpenDocument(url, fileName);
+      await downloadAndOpenDocument(url, getAttachmentFileName(url));
     } catch (err) {
       Alert.alert('Download failed', 'This file could not be downloaded. Please try again.');
     } finally {
@@ -604,163 +1291,283 @@ function EventItem({ event, ticket }) {
     }
   };
 
-  // System events (status changes, assignment, RCA, automation) — a
-  // calm, muted, centered pill, matching WhatsApp's date/security
-  // notices rather than a chat message. rounded-2xl (not rounded-full)
-  // because a fully-rounded pill looks wrong once text wraps to 2-3
-  // lines — the end caps get stretched into an odd capsule shape. No
-  // numberOfLines here: long status/reassignment messages need to wrap
-  // fully rather than truncate with "…".
-  if (!isMessage) {
-    return (
-      <View className="items-center my-4 px-6">
-        <View className="flex-row items-start bg-slate-500/10 rounded-2xl px-3.5 py-2.5 max-w-full">
-          <Feather
-            name={config.icon || 'info'}
-            size={11}
-            color="#64748b"
-            style={{ marginRight: 6, marginTop: 3 }}
-          />
-          <Text className="font-sans-medium text-slate-600 text-xs text-center flex-1 leading-4">
-            {event.actor_name && (
-              <Text className="font-sans-semibold text-slate-700">{event.actor_name}: </Text>
-            )}
-            <Text>{event.message || config.label}</Text>
-          </Text>
-        </View>
-        <Text className="font-sans text-slate-400 text-[10px] mt-1.5">
-          {formatEventTime(event.created_at)}
-        </Text>
-      </View>
-    );
-  }
+  const big = 20;
+  const tail = 7;
+  const radius = isMe
+    ? {
+        borderTopLeftRadius: big,
+        borderTopRightRadius: runStart ? big : tail,
+        borderBottomRightRadius: tail,
+        borderBottomLeftRadius: big,
+      }
+    : {
+        borderTopLeftRadius: runStart ? big : tail,
+        borderTopRightRadius: big,
+        borderBottomRightRadius: big,
+        borderBottomLeftRadius: tail,
+      };
+
+  const imageOnly = !event.message && images.length > 0;
 
   return (
-    <View className={`flex-row items-end my-2 ${alignRight ? 'justify-end' : 'justify-start'}`}>
-      {!alignRight && (
-        <View className="w-7 h-7 rounded-full bg-bg-subtle items-center justify-center mr-2 mb-1">
-          <Text className="font-sans-semibold text-text-secondary text-xs">
-            {event.actor_name ? event.actor_name.charAt(0).toUpperCase() : 'C'}
-          </Text>
-        </View>
-      )}
-
-      {/* overflow-hidden + no padding on the bubble itself is the actual
-          fix: previously px-4 py-3 applied uniformly to EVERYTHING inside
-          the bubble, including images, which is what created the thick
-          padding around attached photos. Text/document/timestamp content
-          now lives in padded inner Views; images render as direct
-          children of this outer container so they can bleed edge-to-edge.
-          No explicit borderRadius is needed on the <Image> itself —
-          overflow-hidden on this rounded-2xl container automatically
-          clips any full-width child to follow the bubble's own corners,
-          which is more reliable than trying to hand-match a radius value. */}
-      <View
-        className={`max-w-[75%] rounded-2xl shadow-sm overflow-hidden ${
-          alignRight
-            ? 'bg-[#DBEBFE] rounded-br-md'
-            : 'bg-white border border-slate-200 rounded-bl-md'
-        }`}
-      >
-        {(!alignRight || event.message) && (
-          <View className="px-4 pt-3 pb-2">
-            {!alignRight && (
-              <Text className="font-sans-semibold text-[10px] uppercase tracking-wide mb-1 text-text-tertiary">
-                {event.actor_name || 'System'}
-              </Text>
-            )}
-
-            {event.message ? (
-              <Text className="font-sans text-[15px] leading-5 text-slate-900">
-                {event.message}
-              </Text>
-            ) : null}
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: isMe ? 'flex-end' : 'flex-start',
+        marginTop: runStart ? 8 : 4,
+      }}
+    >
+      {!isMe ? (
+        runEnd ? (
+          <View
+            style={[
+              {
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                backgroundColor: C.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 10,
+                marginBottom: 2,
+              },
+              SHADOW_CARD,
+            ]}
+          >
+            <Text className="font-sans-semibold" style={{ fontSize: 12, color: tone.accent }}>
+              {event.actor_name ? event.actor_name.charAt(0).toUpperCase() : 'S'}
+            </Text>
           </View>
-        )}
+        ) : (
+          <View style={{ width: 42 }} />
+        )
+      ) : null}
 
-        {imageAttachments.length > 0 && (
-          <>
-            {imageAttachments.map((url) => (
-              <TouchableOpacity
-                key={url}
-                activeOpacity={0.85}
-                onPress={() => setLightboxUrl(url)}
+      <View
+        style={[
+          {
+            maxWidth: '82%',
+            backgroundColor: isMe ? tone.bubble : C.surface,
+            overflow: 'hidden',
+            padding: imageOnly ? 5 : 0,
+          },
+          radius,
+          isMe ? null : SHADOW_CARD,
+        ]}
+      >
+        {!isMe && runStart ? (
+          <Text
+            className="font-sans-semibold"
+            style={{ fontSize: 11.5, color: tone.accent, paddingHorizontal: 16, paddingTop: 13 }}
+          >
+            {event.actor_name || 'Support'}
+          </Text>
+        ) : null}
+
+        {event.message ? (
+          <Text
+            className="font-sans"
+            style={{
+              fontSize: 15.5,
+              lineHeight: 23,
+              color: C.ink,
+              paddingHorizontal: 16,
+              paddingTop: !isMe && runStart ? 5 : 13,
+            }}
+          >
+            {event.message}
+          </Text>
+        ) : null}
+
+        {images.map((url, i) => (
+          <TouchableOpacity
+            key={url}
+            activeOpacity={0.85}
+            onPress={() => setLightboxUrl(url)}
+            style={{ marginTop: imageOnly && i === 0 ? 0 : 8 }}
+          >
+            <Image
+              source={{ uri: url }}
+              contentFit="cover"
+              style={{ width: 232, height: 150, borderRadius: imageOnly ? 16 : 0 }}
+              cachePolicy="disk"
+              transition={150}
+            />
+            {imageOnly && i === images.length - 1 ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  right: 9,
+                  bottom: 9,
+                  backgroundColor: 'rgba(12,21,36,0.55)',
+                  borderRadius: 999,
+                  paddingHorizontal: 9,
+                  paddingVertical: 4,
+                }}
               >
-                <Image source={{ uri: url }} resizeMode="cover" className="w-full h-48" />
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
+                <Text className="font-sans-medium" style={{ fontSize: 11, color: '#FFFFFF' }}>
+                  {clockTime(event.created_at)}
+                </Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        ))}
 
-        {documentAttachments.length > 0 && (
-          <View className="px-4 pt-2">
-            {documentAttachments.map((url) => {
-              const fileName = getAttachmentFileName(url);
-              const isDownloading = downloadingUrl === url;
+        {videos.length > 0 ? (
+          <View style={{ paddingHorizontal: 10, paddingTop: 10 }}>
+            {videos.map((url) => (
+              <AttachmentRow
+                key={url}
+                icon="film"
+                actionIcon="play-circle"
+                title={prettyFileName(url).title}
+                meta="Video · tap to play"
+                isMe={isMe}
+                isDownloading={downloadingUrl === url}
+                onPress={() => handleFilePress(url)}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {documents.length > 0 ? (
+          <View style={{ paddingHorizontal: 10, paddingTop: 10 }}>
+            {documents.map((url) => {
+              const { title, ext } = prettyFileName(url);
               return (
-                <TouchableOpacity
+                <AttachmentRow
                   key={url}
-                  activeOpacity={0.7}
-                  onPress={() => handleDocumentPress(url)}
-                  disabled={isDownloading}
-                  className={`flex-row items-center p-3 mb-2 rounded-xl ${
-                    alignRight ? 'bg-white/50' : 'bg-slate-50 border border-slate-100'
-                  }`}
-                >
-                  <Feather name="file-text" size={18} color="#475569" />
-                  <Text
-                    numberOfLines={1}
-                    className="flex-1 font-sans-semibold text-sm mx-2.5 text-slate-900"
-                  >
-                    {fileName}
-                  </Text>
-                  {isDownloading ? (
-                    <ActivityIndicator size="small" color="#475569" />
-                  ) : (
-                    <Feather name="arrow-down-circle" size={18} color="#475569" />
-                  )}
-                </TouchableOpacity>
+                  icon="file-text"
+                  actionIcon="arrow-down-circle"
+                  title={title}
+                  meta={`${ext} · tap to open`}
+                  isMe={isMe}
+                  isDownloading={downloadingUrl === url}
+                  onPress={() => handleFilePress(url)}
+                />
               );
             })}
           </View>
-        )}
+        ) : null}
 
-        <View className="flex-row justify-end items-center px-4 pb-3 pt-2">
-          <Text className="font-sans text-[11px] text-slate-500">
-            {formatEventTime(event.created_at)}
-          </Text>
-          {alignRight && (
-            <Feather name="check" size={12} color="#64748b" style={{ marginLeft: 4 }} />
-          )}
-        </View>
+        {!imageOnly ? (
+          <View style={{ alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 10, paddingTop: 5 }}>
+            <Text className="font-sans-medium" style={{ fontSize: 11.5, color: isMe ? tone.bubbleMeta : C.faint }}>
+              {clockTime(event.created_at)}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
-      {alignRight && (
-        <View className="w-7 h-7 rounded-full bg-primary-600 items-center justify-center ml-2 mb-1">
-          <Text className="font-sans-semibold text-white text-xs">
-            {event.actor_name ? event.actor_name.charAt(0).toUpperCase() : 'A'}
-          </Text>
-        </View>
-      )}
-
-      <Modal
-        visible={!!lightboxUrl}
-        transparent={false}
-        animationType="fade"
-        onRequestClose={() => setLightboxUrl(null)}
-      >
+      <Modal visible={!!lightboxUrl} transparent={false} animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
         <LightboxContent url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       </Modal>
     </View>
   );
 }
 
-// ------------------------------------------------------------------
-// LIGHTBOX CONTENT
-// ------------------------------------------------------------------
+function AttachmentRow({ icon, actionIcon, title, meta, isMe, isDownloading, onPress }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      disabled={isDownloading}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 11,
+        backgroundColor: isMe ? 'rgba(255,255,255,0.6)' : C.chipGrey,
+        borderRadius: 15,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        marginBottom: 4,
+        minWidth: 210,
+      }}
+    >
+      <View
+        style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.blueTint, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Feather name={icon} size={16} color={C.blue} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+          {title}
+        </Text>
+        <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+          {meta}
+        </Text>
+      </View>
+      {isDownloading ? <ActivityIndicator size="small" color={C.muted} /> : <Feather name={actionIcon} size={19} color={C.soft} />}
+    </TouchableOpacity>
+  );
+}
+
+/* ------------------------------------------------------------------
+   SHEET PIECES
+------------------------------------------------------------------ */
+function SheetLabel({ children, style }) {
+  return (
+    <Text className="font-sans-semibold" style={[{ fontSize: 11.5, color: C.soft, marginLeft: 4, marginBottom: 8 }, style]}>
+      {children}
+    </Text>
+  );
+}
+
+function InfoGroup({ children }) {
+  return (
+    <View style={[{ backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 14 }, SHADOW_CARD]}>{children}</View>
+  );
+}
+
+function InfoRow({ row, first, status, onPress }) {
+  const Wrapper = onPress ? TouchableOpacity : View;
+  return (
+    <Wrapper
+      {...(onPress ? { activeOpacity: 0.6, onPress } : {})}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 58,
+        paddingVertical: 12,
+        borderTopWidth: first ? 0 : 1,
+        borderTopColor: C.hair,
+      }}
+    >
+      <View
+        style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.blueTint, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}
+      >
+        <Feather name={row.icon} size={15} color={C.blue} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.soft }}>
+          {row.label}
+        </Text>
+        {row.isStatus ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+            <View
+              style={{ width: 8, height: 8, borderRadius: 999, marginRight: 7, backgroundColor: STATUS_DOT_COLORS[status] || C.faint }}
+            />
+            <Text className="font-sans-semibold" style={{ fontSize: 14, color: C.ink }}>
+              {statusLabel(status)}
+            </Text>
+          </View>
+        ) : (
+          <Text numberOfLines={2} className="font-sans-semibold" style={{ fontSize: 14, color: C.ink, marginTop: 2 }}>
+            {row.value}
+          </Text>
+        )}
+      </View>
+      {onPress ? <Feather name="chevron-right" size={18} color="#C3CDDB" /> : null}
+    </Wrapper>
+  );
+}
+
+/* ------------------------------------------------------------------
+   LIGHTBOX — behaviour unchanged
+------------------------------------------------------------------ */
 function LightboxContent({ url, onClose }) {
   const insets = useSafeAreaInsets();
-
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionState, setActionState] = useState(null);
@@ -769,9 +1576,7 @@ function LightboxContent({ url, onClose }) {
     const baseName = getAttachmentFileName(imageUrl) || 'image.jpg';
     const localUri = `${FileSystem.cacheDirectory}${Date.now()}-${baseName}`;
     const result = await FileSystem.downloadAsync(imageUrl, localUri);
-    if (!result?.uri) {
-      throw new Error('Download did not return a local file URI.');
-    }
+    if (!result?.uri) throw new Error('Download did not return a local file URI.');
     return result.uri;
   };
 
@@ -804,14 +1609,11 @@ function LightboxContent({ url, onClose }) {
       const localUri = await downloadImageForAction(url);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission needed',
-          'Please allow photo library access in your device settings to save images.'
-        );
+        Alert.alert('Permission needed', 'Please allow photo library access in your device settings to save images.');
         return;
       }
       await MediaLibrary.saveToLibraryAsync(localUri);
-      Alert.alert('Saved', 'Image saved to gallery.');
+      Alert.alert('Saved', 'Image saved to your gallery.');
     } catch (err) {
       console.error('[Lightbox] Save failed:', err);
       Alert.alert('Save failed', err?.message || 'This image could not be saved. Please try again.');
@@ -823,44 +1625,64 @@ function LightboxContent({ url, onClose }) {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View className="flex-1 bg-black">
+      <View style={{ flex: 1, backgroundColor: '#000000' }}>
         <ZoomableImage uri={url} onSingleTap={() => setToolbarVisible((prev) => !prev)} />
 
-        {toolbarVisible && (
-          <View className="absolute top-0 left-0 right-0 z-20" pointerEvents="box-none">
+        {toolbarVisible ? (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} pointerEvents="box-none">
             <LinearGradient
               colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0)']}
               style={{ paddingTop: insets.top + 10, paddingBottom: 28, paddingHorizontal: 16 }}
             >
-              <View className="flex-row items-center justify-between">
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={onClose}
-                  className="w-10 h-10 rounded-full bg-white/15 items-center justify-center"
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                 >
                   <Feather name="x" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
 
-                {isProcessing && (
+                {isProcessing ? (
                   <View
-                    className="flex-row items-center bg-white/15 px-3 py-1.5 rounded-full"
-                    style={{ gap: 6 }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 999,
+                    }}
                   >
                     <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text className="font-sans-semibold text-white text-xs">
+                    <Text className="font-sans-semibold" style={{ fontSize: 12, color: '#FFFFFF' }}>
                       {actionState === 'saving' ? 'Saving…' : 'Sharing…'}
                     </Text>
                   </View>
-                )}
+                ) : null}
 
-                <View className="flex-row" style={{ gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={handleShare}
                     disabled={isProcessing}
-                    className={`w-10 h-10 rounded-full bg-white/15 items-center justify-center ${
-                      isProcessing ? 'opacity-50' : ''
-                    }`}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 999,
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: isProcessing ? 0.5 : 1,
+                    }}
                   >
                     <Feather name="share" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
@@ -869,9 +1691,15 @@ function LightboxContent({ url, onClose }) {
                     activeOpacity={0.7}
                     onPress={handleSave}
                     disabled={isProcessing}
-                    className={`w-10 h-10 rounded-full bg-white/15 items-center justify-center ${
-                      isProcessing ? 'opacity-50' : ''
-                    }`}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 999,
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: isProcessing ? 0.5 : 1,
+                    }}
                   >
                     <Feather name="download" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
@@ -879,15 +1707,15 @@ function LightboxContent({ url, onClose }) {
               </View>
             </LinearGradient>
           </View>
-        )}
+        ) : null}
       </View>
     </GestureHandlerRootView>
   );
 }
 
-// ------------------------------------------------------------------
-// ZOOMABLE IMAGE
-// ------------------------------------------------------------------
+/* ------------------------------------------------------------------
+   ZOOMABLE IMAGE — unchanged
+------------------------------------------------------------------ */
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
 const DOUBLE_TAP_SCALE = 2.5;
@@ -925,24 +1753,16 @@ function ZoomableImage({ uri, onSingleTap }) {
     });
   };
 
-  const onPinchGestureEvent = Animated.event([{ nativeEvent: { scale: pinchScale } }], {
-    useNativeDriver: true,
-  });
+  const onPinchGestureEvent = Animated.event([{ nativeEvent: { scale: pinchScale } }], { useNativeDriver: true });
 
   const onPinchHandlerStateChange = (event) => {
     if (event.nativeEvent.oldState === State.ACTIVE) {
-      const nextScale = Math.min(
-        Math.max(lastScale.current * event.nativeEvent.scale, MIN_SCALE),
-        MAX_SCALE
-      );
+      const nextScale = Math.min(Math.max(lastScale.current * event.nativeEvent.scale, MIN_SCALE), MAX_SCALE);
       lastScale.current = nextScale;
       pinchScale.setValue(1);
       baseScale.setValue(nextScale);
-      if (nextScale <= MIN_SCALE) {
-        resetTransform();
-      } else {
-        setIsZoomed(true);
-      }
+      if (nextScale <= MIN_SCALE) resetTransform();
+      else setIsZoomed(true);
     }
   };
 
@@ -975,18 +1795,11 @@ function ZoomableImage({ uri, onSingleTap }) {
   };
 
   const onSingleTapStateChange = (event) => {
-    if (event.nativeEvent.state === State.ACTIVE) {
-      onSingleTap?.();
-    }
+    if (event.nativeEvent.state === State.ACTIVE) onSingleTap?.();
   };
 
   return (
-    <TapGestureHandler
-      ref={singleTapRef}
-      numberOfTaps={1}
-      waitFor={doubleTapRef}
-      onHandlerStateChange={onSingleTapStateChange}
-    >
+    <TapGestureHandler ref={singleTapRef} numberOfTaps={1} waitFor={doubleTapRef} onHandlerStateChange={onSingleTapStateChange}>
       <Animated.View style={{ flex: 1 }}>
         <TapGestureHandler ref={doubleTapRef} numberOfTaps={2} onHandlerStateChange={onDoubleTapStateChange}>
           <Animated.View style={{ flex: 1 }}>
@@ -1008,11 +1821,7 @@ function ZoomableImage({ uri, onSingleTap }) {
                     <Animated.Image
                       source={{ uri }}
                       resizeMode="contain"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        transform: [{ translateX }, { translateY }, { scale }],
-                      }}
+                      style={{ width: '100%', height: '100%', transform: [{ translateX }, { translateY }, { scale }] }}
                     />
                   </Animated.View>
                 </PinchGestureHandler>
@@ -1022,82 +1831,5 @@ function ZoomableImage({ uri, onSingleTap }) {
         </TapGestureHandler>
       </Animated.View>
     </TapGestureHandler>
-  );
-}
-
-// ------------------------------------------------------------------
-// LIVE TRACKER COMPONENT
-// ------------------------------------------------------------------
-function TicketLiveTracker({ ticket }) {
-  const status = ticket?.status || 'OPEN';
-
-  let activeIndex = 0;
-  if (['IN_PROGRESS', 'ESCALATED', 'REOPENED'].includes(status)) activeIndex = 1;
-  else if (status === 'RESOLVED' || status === 'CLOSED') activeIndex = 2;
-
-  const trackerStates = [
-    {
-      title: 'Ticket Received',
-      message: 'Your request is securely logged. We are assigning it to an expert.',
-      icon: 'inbox',
-      iconColor: '#0E8074',
-      iconBg: 'bg-info-bg',
-      barColor: 'bg-info-text',
-    },
-    {
-      title: 'Investigating',
-      message: "Our team is actively working on a fix. We'll keep you posted.",
-      icon: 'activity',
-      iconColor: '#FF5A36',
-      iconBg: 'bg-primary-50',
-      barColor: 'bg-primary-500',
-    },
-    {
-      title: 'Resolved',
-      message: 'This issue has been successfully resolved and closed.',
-      icon: 'check-circle',
-      iconColor: '#0F9D58',
-      iconBg: 'bg-success-bg',
-      barColor: 'bg-success-text',
-    },
-  ];
-
-  const currentState = trackerStates[activeIndex];
-
-  return (
-    <View>
-      <View className="flex-row justify-between items-center mb-3">
-        <View className="flex-row items-center">
-          <View className={`w-8 h-8 rounded-lg items-center justify-center mr-2.5 ${currentState.iconBg}`}>
-            <Feather name={currentState.icon} size={18} color={currentState.iconColor} />
-          </View>
-          <Text className="font-sans-semibold text-text-primary text-sm">{currentState.title}</Text>
-        </View>
-
-        {ticket?.updated_at && (
-          <Text className="font-sans-medium text-text-tertiary text-[11px]">
-            {formatEventTime(ticket.updated_at)}
-          </Text>
-        )}
-      </View>
-
-      <View className="flex-row mb-2.5" style={{ gap: 6 }}>
-        {[0, 1, 2].map((stepIndex) => {
-          const isCompleted = stepIndex <= activeIndex;
-          return (
-            <View
-              key={stepIndex}
-              className={`flex-1 h-1 rounded-full ${
-                isCompleted ? currentState.barColor : 'bg-bg-subtle'
-              }`}
-            />
-          );
-        })}
-      </View>
-
-      <Text className="font-sans-medium text-text-secondary text-xs leading-relaxed">
-        {currentState.message}
-      </Text>
-    </View>
   );
 }

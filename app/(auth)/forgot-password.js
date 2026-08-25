@@ -123,8 +123,7 @@ export default function ForgotPasswordScreen() {
 
   // Shared focus-aware wrapper classes for text inputs
   const fieldWrapperClass = (field) =>
-    `bg-surface border-[1.5px] rounded-md flex-row items-center ${
-      focusedField === field ? 'border-primary-500' : 'border-border'
+    `bg-surface border-[1.5px] rounded-md flex-row items-center ${focusedField === field ? 'border-primary-500' : 'border-border'
     }`;
 
   return (
@@ -341,9 +340,8 @@ function SubmitButton({ label, onPress, isSubmitting }) {
       activeOpacity={0.85}
       accessibilityRole="button"
       accessibilityState={{ disabled: isSubmitting }}
-      className={`rounded-md py-4 items-center justify-center shadow-lg ${
-        isSubmitting ? 'bg-primary-600' : 'bg-primary-500'
-      }`}
+      className={`rounded-md py-4 items-center justify-center shadow-lg ${isSubmitting ? 'bg-primary-600' : 'bg-primary-500'
+        }`}
     >
       {isSubmitting ? (
         <ActivityIndicator color="#FBF9F5" />

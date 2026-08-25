@@ -116,39 +116,39 @@ function ExportModal({ visible, onClose, earliestYear }) {
         years.push(currentYear);
     }
 
-const handleExport = async () => {
-  setIsExporting(true);
-  try {
-    const tickets = await ticketService.getResolvedTicketsForExport(year, month);
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const tickets = await ticketService.getResolvedTicketsForExport(year, month);
 
-    if (!tickets || tickets.length === 0) {
-      Alert.alert('No data', 'No resolved tickets found for this period.');
-      return;
-    }
+            if (!tickets || tickets.length === 0) {
+                Alert.alert('No data', 'No resolved tickets found for this period.');
+                return;
+            }
 
-    const csvContent = ticketsToCsv(tickets);
-    const fileUri = FileSystem.documentDirectory + `resolution-log-${year}-${month}.csv`;
+            const csvContent = ticketsToCsv(tickets);
+            const fileUri = FileSystem.documentDirectory + `resolution-log-${year}-${month}.csv`;
 
-    await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+            await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+                encoding: FileSystem.EncodingType.UTF8,
+            });
 
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (isAvailable) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'text/csv',
-        dialogTitle: 'Export Resolution Log',
-        UTI: 'public.comma-separated-values-text', // iOS
-      });
-    }
+            const isAvailable = await Sharing.isAvailableAsync();
+            if (isAvailable) {
+                await Sharing.shareAsync(fileUri, {
+                    mimeType: 'text/csv',
+                    dialogTitle: 'Export Resolution Log',
+                    UTI: 'public.comma-separated-values-text', // iOS
+                });
+            }
 
-    onClose();
-  } catch (err) {
-    Alert.alert('Export failed', err.message || 'Please try again.');
-  } finally {
-    setIsExporting(false);
-  }
-};
+            onClose();
+        } catch (err) {
+            Alert.alert('Export failed', err.message || 'Please try again.');
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
 
     return (

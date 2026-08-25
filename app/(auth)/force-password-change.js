@@ -45,10 +45,6 @@ const handleSubmit = async () => {
     await authService.changePassword(undefined, newPassword);
     await clearAuth();
   } catch (error) {
-    // Even if the request technically "failed" after the backend already
-    // revoked the session server-side, the safest UX is still to log out
-    // locally and send them to login — retrying with a dead session
-    // token will never succeed.
     await clearAuth();
     setErrorMessage('Password updated. Please log in with your new password.');
   } finally {

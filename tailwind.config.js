@@ -119,12 +119,6 @@ module.exports = {
         10: '64px',
         12: '96px',
       },
-
-      // React Native / NativeWind reads shadow color+opacity separately from
-      // web box-shadow, so these are approximations for shadowColor/shadowOpacity
-      // pairs. Prefer the `shadow-*` helpers below for cross-platform use, but
-      // for RN-specific components you may still need inline shadow* props
-      // (see boxShadow note below).
       boxShadow: {
         xs: '0 1px 2px rgba(46, 42, 36, 0.04)',
         sm: '0 2px 6px rgba(46, 42, 36, 0.06)',

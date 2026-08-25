@@ -36,7 +36,12 @@ export const userService = {
 
     getCustomerConnections: async (customerId) => {
         const { data } = await apiClient.get(`/users/customers/${customerId}/connections`);
-        return data.data?.connections ?? data.data ?? [];
+        return data.data.connections ?? [];
+    },
+
+     getOutstandingAmount: async () => {
+        const { data } = await apiClient.get(`/users/outstanding-balance`);
+        return data.data ?? "";
     },
     registerPushToken: async (token, platform) => {
         const { data } = await apiClient.post('/users/push-token', { token, platform });

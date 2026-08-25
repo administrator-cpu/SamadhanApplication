@@ -1,12 +1,25 @@
 // src/utils/ticketStatus.js
 export const STATUS_STYLES = {
-  OPEN: { bg: 'bg-blue-100', text: 'text-blue-700' },
-  IN_PROGRESS: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  ESCALATED: { bg: 'bg-red-100', text: 'text-red-700' },
-  RESOLVED: { bg: 'bg-green-100', text: 'text-green-700' },
-  CLOSED: { bg: 'bg-gray-100', text: 'text-gray-600' },
-  REOPENED: { bg: 'bg-purple-100', text: 'text-purple-700' },
+  OPEN: { text: 'text-blue-50', bg: 'bg-blue-700' },
+  IN_PROGRESS: { text: 'text-violet-900', bg: 'bg-purple-50' },
+  ESCALATED: { text: 'text-rose-50', bg: 'bg-rose-700' },
+  RESOLVED: { text: 'text-emerald-700', bg: 'bg-emerald-50' },
+  CLOSED: { text: 'text-slate-100', bg: 'bg-slate-500' },
+  REOPENED: { text: 'text-rose-50', bg: 'bg-rose-700' },
 };
+
+export const STATUS_DOT_COLORS = {
+  OPEN: '#3B82F6',
+  IN_PROGRESS: '#8B5CF6',
+  ESCALATED: '#EF4444',
+  RESOLVED: '#10B981',
+  CLOSED: '#94A3B8',
+  REOPENED: '#A855F7',
+};
+
+export function getStatusStyle(status) {
+  return STATUS_STYLES[status] || STATUS_STYLES.CLOSED;
+}
 
 export function statusLabel(status) {
   return (status || '').replace(/_/g, ' ');

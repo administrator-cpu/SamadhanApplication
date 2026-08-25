@@ -1,7 +1,7 @@
 // src/hooks/usePushNotifications.js
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import Notifications, { isPushAvailable } from '../utils/notificationsSafe';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -17,6 +17,7 @@ Notifications.setNotificationHandler({
 });
 
 async function registerForPushNotifications() {
+  if (!isPushAvailable) return null;
   if (!Device.isDevice) {
     return null;
   }

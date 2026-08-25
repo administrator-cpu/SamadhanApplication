@@ -8,7 +8,7 @@ export default function CustomerConnections() {
   const { id } = useLocalSearchParams();
   const { data, isLoading, isError, error } = useCustomerConnections(id);
 
-  const connections = data?.connections || [];
+  const connections = data || [];
 
   return (
     <View style={styles.container}>

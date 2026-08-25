@@ -1,8 +1,13 @@
 // src/components/TicketOutageForm.js
-import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useUpdateOutage } from '../hooks/useTickets';
+import { haptics } from '../utils/haptics';
+import { FORM, T } from './ticketTheme';
+
+// Common upstream providers — tapping one fills the field, typing still works.
+const SUGGESTIONS = ['Airtel', 'Bharti', 'Extreme IX', 'Jio', 'Tata', 'Local loop'];
 
 export default function TicketOutageForm({ ticket, onDone }) {
   const [problemSide, setProblemSide] = useState(ticket?.problem_side || '');
@@ -12,64 +17,85 @@ export default function TicketOutageForm({ ticket, onDone }) {
   const handleSave = () => {
     mutate(
       { problemSide: problemSide.trim(), externalTicketNo: telcoSrNumber.trim() },
-      { onSuccess: () => onDone?.() }
+      {
+        onSuccess: () => {
+          haptics.success();
+          onDone?.();
+        },
+        onError: () => haptics.error(),
+      }
     );
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Problem Side / Provider</Text>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 34 }}>
+      <View style={styles.intro}>
+        <View style={styles.introChip}>
+          <Feather name="wifi-off" size={16} color={T.amber} />
+        </View>
+        <Text style={styles.introText}>
+          Record who owns the fault upstream, so the next agent doesn't chase it twice.
+        </Text>
+      </View>
+
+      <Text style={[FORM.label, { marginTop: 20 }]}>Where the fault sits</Text>
       <TextInput
         value={problemSide}
         onChangeText={setProblemSide}
         placeholder="e.g. Airtel"
-        placeholderTextColor="#9ca3af"
-        style={styles.input}
+        placeholderTextColor={T.hint}
+        style={FORM.input}
       />
+      <View style={styles.suggestRow}>
+        {SUGGESTIONS.map((name) => {
+          const active = problemSide.trim().toLowerCase() === name.toLowerCase();
+          return (
+            <Pressable
+              key={name}
+              onPress={() => setProblemSide(name)}
+              style={[styles.suggestChip, active && styles.suggestChipActive]}
+            >
+              <Text style={[styles.suggestText, active && styles.suggestTextActive]}>{name}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      <Text style={styles.label}>Telco SR Number</Text>
+      <Text style={[FORM.label, { marginTop: 20 }]}>Their ticket number</Text>
       <TextInput
         value={telcoSrNumber}
         onChangeText={setTelcoSrNumber}
         placeholder="e.g. TT-128492"
-        placeholderTextColor="#9ca3af"
-        style={styles.input}
+        placeholderTextColor={T.hint}
+        autoCapitalize="characters"
+        style={FORM.input}
       />
+      <Text style={styles.hint}>Leave blank if the provider hasn't given one yet.</Text>
 
-      <Pressable onPress={handleSave} disabled={isPending} style={styles.saveButton}>
+      <Pressable onPress={handleSave} disabled={isPending} style={[FORM.primary, { marginTop: 24 }, isPending && FORM.disabled]}>
         {isPending ? (
-          <ActivityIndicator size="small" color="#ffffff" />
+          <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
           <>
-            <Feather name="check" size={15} color="#ffffff" />
-            <Text style={styles.saveText}>Save Outage Details</Text>
+            <Feather name="check" size={16} color="#FFFFFF" />
+            <Text style={FORM.primaryText}>Save outage details</Text>
           </>
         )}
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 4 },
-  label: { fontSize: 12, fontWeight: '600', color: '#64748b', marginBottom: 6, marginTop: 10 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 14,
-    backgroundColor: '#f8fafc',
-  },
-  saveButton: {
-    flexDirection: 'row',
-    gap: 6,
-    backgroundColor: '#3b82f6',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  saveText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+  intro: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: T.field, borderRadius: 18, padding: 14 },
+  introChip: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  introText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: T.body },
+
+  suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  suggestChip: { height: 38, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, backgroundColor: T.field },
+  suggestChipActive: { backgroundColor: T.blueTint },
+  suggestText: { fontSize: 12.5, fontWeight: '600', color: T.muted },
+  suggestTextActive: { color: T.blueInk },
+
+  hint: { fontSize: 11.5, color: T.soft, marginTop: 8, marginLeft: 4 },
 });

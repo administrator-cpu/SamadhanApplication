@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { authService } from '../api/authService';
-import { storage } from '../utils/storage';
 import { userService } from '../api/userService';
+import { storage } from '../utils/storage';
+import notificationsSafe from '@/utils/notificationsSafe';
+import { queryClient } from '../api/queryClient';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -47,15 +49,16 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-logout: async () => {
-  try {
-    await userService.removePushToken().catch(() => {});
-    await authService.logout()
-  } finally {
-    await get().clearAuth();
-  }
-},
-
+  logout: async () => {
+    try {
+      await userService.removePushToken().catch(() => {});
+      await authService.logout();
+    } finally {
+      await notificationsSafe.setBadgeCountAsync(0).catch(() => {});
+      queryClient.clear();
+      await get().clearAuth();
+    }
+  },
 
   clearAuth: async () => {
     await storage.deleteItemAsync('auth_token');

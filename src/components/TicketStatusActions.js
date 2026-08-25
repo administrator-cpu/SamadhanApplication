@@ -1,28 +1,31 @@
 // src/components/TicketStatusActions.js
-import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useAuthStore } from '../store/authStore';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUpdateTicketStatus } from '../hooks/useTickets';
+import { useAuthStore } from '../store/authStore';
+import { haptics } from '../utils/haptics';
 import { canReopen } from '../utils/ticketStatus';
 import ConfirmDialog from './ConfirmDialog';
+import { T } from './ticketTheme';
 
 const STAFF_ROLES = ['SUPPORT_AGENT', 'ADMIN'];
 
+// Each action carries the plain sentence a user would actually say.
 const STAFF_TRANSITIONS = {
   OPEN: [
-    { to: 'ESCALATED', label: 'Escalate', icon: 'arrow-up-circle', color: '#ea580c' },
-    { to: 'RESOLVED', label: 'Resolve', icon: 'check-circle', color: '#16a34a' },
+    { to: 'ESCALATED', label: 'Escalate', note: 'Hand to senior team', icon: 'arrow-up-circle', color: T.amberInk, tint: T.amberTint },
+    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: T.greenTint },
   ],
   IN_PROGRESS: [
-    { to: 'ESCALATED', label: 'Escalate', icon: 'arrow-up-circle', color: '#ea580c' },
-    { to: 'RESOLVED', label: 'Resolve', icon: 'check-circle', color: '#16a34a' },
+    { to: 'ESCALATED', label: 'Escalate', note: 'Hand to senior team', icon: 'arrow-up-circle', color: T.amberInk, tint: T.amberTint },
+    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: T.greenTint },
   ],
   ESCALATED: [
-    { to: 'RESOLVED', label: 'Resolve', icon: 'check-circle', color: '#16a34a' },
+    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: T.greenTint },
   ],
   RESOLVED: [
-    { to: 'CLOSED', label: 'Close', icon: 'archive', color: '#4b5563' },
+    { to: 'CLOSED', label: 'Close ticket', note: 'Locks the thread', icon: 'archive', color: T.body, tint: T.field },
   ],
 };
 
@@ -68,12 +71,10 @@ export default function TicketStatusActions({ ticket }) {
 
   if (!ticket) return null;
 
-  const staffOptions = isStaff ? (STAFF_TRANSITIONS[ticket.status] || []) : [];
+  const staffOptions = isStaff ? STAFF_TRANSITIONS[ticket.status] || [] : [];
   const reopenAvailable = canReopen(ticket);
 
-  if (staffOptions.length === 0 && !reopenAvailable) {
-    return null;
-  }
+  if (staffOptions.length === 0 && !reopenAvailable) return null;
 
   const closeDialog = () => {
     setDialogTarget(null);
@@ -87,7 +88,11 @@ export default function TicketStatusActions({ ticket }) {
 
     closeDialog();
     setPendingStatus(targetStatus);
-    mutate(payload, { onSettled: () => setPendingStatus(null) });
+    mutate(payload, {
+      onSuccess: () => haptics.success(),
+      onError: () => haptics.error(),
+      onSettled: () => setPendingStatus(null),
+    });
   };
 
   const dialogConfig = dialogTarget ? DIALOG_CONFIG[dialogTarget] : null;
@@ -97,27 +102,31 @@ export default function TicketStatusActions({ ticket }) {
     <>
       <View style={styles.container}>
         {staffOptions.map((option) => (
-          <ActionButton
+          <ActionRow
             key={option.to}
             label={option.label}
+            note={option.note}
             icon={option.icon}
             color={option.color}
+            tint={option.tint}
             isLoading={isPending && pendingStatus === option.to}
             disabled={isPending}
             onPress={() => setDialogTarget(option.to)}
           />
         ))}
 
-        {reopenAvailable && (
-          <ActionButton
-            label="Reopen Ticket"
+        {reopenAvailable ? (
+          <ActionRow
+            label="Reopen this ticket"
+            note="Picks up where we left off"
             icon="rotate-ccw"
-            color="#7c3aed"
+            color={T.violet}
+            tint={T.violetTint}
             isLoading={isPending && pendingStatus === 'REOPENED'}
             disabled={isPending}
             onPress={() => setDialogTarget('REOPENED')}
           />
-        )}
+        ) : null}
       </View>
 
       <ConfirmDialog
@@ -139,41 +148,39 @@ export default function TicketStatusActions({ ticket }) {
   );
 }
 
-function ActionButton({ label, icon, color, isLoading, disabled, onPress }) {
+function ActionRow({ label, note, icon, color, tint, isLoading, disabled, onPress }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={[styles.button, { borderColor: color }, disabled && styles.buttonDisabled]}
+      style={[styles.row, disabled && styles.rowDisabled]}
     >
-      {isLoading ? (
-        <ActivityIndicator size="small" color={color} />
-      ) : (
-        <Feather name={icon} size={15} color={color} />
-      )}
-      <Text style={[styles.buttonText, { color }]}>{label}</Text>
+      <View style={[styles.chip, { backgroundColor: tint }]}>
+        {isLoading ? <ActivityIndicator size="small" color={color} /> : <Feather name={icon} size={17} color={color} />}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowNote}>{note}</Text>
+      </View>
+      <Feather name="chevron-right" size={18} color="#C3CDDB" />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  button: {
+  container: { gap: 8, paddingBottom: 6 },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#ffffff',
+    gap: 13,
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: T.field,
   },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { fontSize: 13, fontWeight: '600' },
+  rowDisabled: { opacity: 0.5 },
+  chip: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  rowLabel: { fontSize: 14.5, fontWeight: '600', color: T.ink },
+  rowNote: { fontSize: 11.5, color: T.muted, marginTop: 2 },
 });

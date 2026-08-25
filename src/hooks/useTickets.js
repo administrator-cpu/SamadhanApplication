@@ -1,74 +1,98 @@
 // src/hooks/useTickets.js
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ticketService } from '../api/ticketService';
 
-export function useTickets({ status, searchQuery, statusGroup, ownership } = {}) {
+export function useTickets({ status, searchQuery, statusGroup, ownership, limit = 15 } = {}) {
   return useInfiniteQuery({
-    queryKey: ['tickets', { status, searchQuery, statusGroup, ownership }],
+    queryKey: ['tickets', { status, searchQuery, statusGroup, ownership, limit }],
 
-    queryFn: async ({ pageParam = 1 }) => {
-      const res = await ticketService.getTickets({
+    queryFn: ({ pageParam = 1 }) =>
+      ticketService.getTickets({
         page: pageParam,
-        limit: 15,
+        limit,
         status: status || undefined,
         searchQuery: searchQuery || undefined,
         statusGroup: statusGroup || undefined,
         ownership: ownership || undefined,
-      });
-      return res;
-    },
+        sortField: 'updated_at',
+        sortOrder: 'desc',
+      }),
 
     initialPageParam: 1,
 
-    getNextPageParam: (lastPage, allPages) => {
-      const pagination = lastPage.pagination;
-      if (!pagination) return undefined;
-      const currentPage = pagination.currentPage ?? allPages.length;
-      const totalPages = pagination.pages ?? pagination.totalPages;
+    getNextPageParam: (lastPage) => {
+      const { currentPage, totalPages } = lastPage?.pagination ?? {};
+      if (!currentPage || !totalPages) return undefined;
       return currentPage < totalPages ? currentPage + 1 : undefined;
     },
-    gcTime: 60 * 1000,
-     maxPages: 3,
+
+    staleTime: 30 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 
+export function useUpdateReplyStatus(ticketId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (allowCustomerReply) => ticketService.updateReplyStatus(ticketId, allowCustomerReply),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
+  });
+}
 
+export function useEscalatedTickets({ limit = 5 } = {}) {
+  return useQuery({
+    queryKey: ['tickets-escalated', limit],
+    queryFn: () =>
+      ticketService.getTickets({
+        limit,
+        status: 'ESCALATED',
+        sortField: 'updated_at',
+        sortOrder: 'desc',
+      }),
+    staleTime: 30 * 1000,
+  });
+}
 
 export function useTicket(id) {
   return useQuery({
     queryKey: ['ticket', id],
     queryFn: () => ticketService.getTicketById(id),
     enabled: !!id,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 
 export function useAddTicketEvent(ticketId) {
   const queryClient = useQueryClient();
-
   return useMutation({
+    mutationKey: ['ticket-event', ticketId],
     mutationFn: (payload) => ticketService.addTicketEvent(ticketId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-count'] });
     },
   });
 }
 
 export function useUpdateTicketStatus(ticketId) {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (payload) => ticketService.updateTicketStatus(ticketId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-count'] });
     },
   });
 }
 
 export function useRateTicket(ticketId) {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (payload) => ticketService.rateTicket(ticketId, payload),
     onSuccess: () => {
@@ -84,6 +108,7 @@ export function useUpdateRCA(ticketId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-count'] });
     },
   });
 }
@@ -105,6 +130,7 @@ export function useReassignTicket(ticketId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-count'] });
     },
   });
 }
@@ -114,6 +140,7 @@ export function useAgents() {
     queryKey: ['agents'],
     queryFn: ticketService.getAgents,
     staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 }
 
@@ -127,11 +154,11 @@ export function useCategories() {
 
 export function useCreateTicket() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (formData) => ticketService.createTicket(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-count'] });
     },
   });
 }

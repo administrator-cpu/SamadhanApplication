@@ -128,7 +128,7 @@ export default function EditCustomer() {
         </View>
 
         {/* Outstanding Balance Banner */}
-        {customer.outstanding !== null && customer.outstanding !== undefined && user.email !== "abhishek@fab5network.com" && (
+        {customer.outstanding !== null && customer.outstanding !== undefined && user?.email !== "abhishek@fab5network.com" && (
           <View style={[styles.outstandingCard, customer.outstanding > 0 ? styles.outstandingDanger : styles.outstandingSuccess]}>
             <View style={[styles.iconCircle, customer.outstanding > 0 ? styles.iconDanger : styles.iconSuccess]}>
               <Feather name="credit-card" size={18} color={customer.outstanding > 0 ? '#dc2626' : '#16a34a'} />

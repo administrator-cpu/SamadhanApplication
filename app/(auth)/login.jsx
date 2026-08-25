@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  Pressable, 
-  ActivityIndicator, 
-  KeyboardAvoidingView, 
-  Platform, 
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
@@ -39,15 +39,12 @@ const fonts = {
   bodySemibold: 'Karla_600SemiBold',
 };
 
-// Static — defined once, outside the component, shape never changes between renders.
 const styles = StyleSheet.create({
   fieldWrapper: {
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: 10,
-    // Shadow props always present (even when "off") so the native view
-    // never needs to be torn down and recreated on focus change.
     shadowColor: colors.primary500,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,

@@ -1,28 +1,69 @@
 // src/components/RaiseTicketForm.js
+import { Feather } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  TouchableOpacity,
-  ScrollView,
-  Image,
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { useConnectionsByEmail, useMyConnections } from '../hooks/useCustomers';
+import { useCategories, useCreateTicket } from '../hooks/useTickets';
+import { haptics } from '../utils/haptics';
 import ConnectionPicker from './ConnectionPicker';
-import { useCreateTicket, useCategories } from '../hooks/useTickets';
-import { useMyConnections, useConnectionsByEmail } from '../hooks/useCustomers';
 
 const MAX_IMAGES = 10;
 const MAX_ALTERNATE_EMAILS = 3;
+const MAX_MESSAGE = 600;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/* ── palette (matches design 9a) ───────────────────────────── */
+const C = {
+  bg: '#f3f2fd',
+  card: '#ffffff',
+  ink: '#151233',
+  inkSoft: '#3a3670',
+  sub: '#6d6a96',
+  muted: '#9d9ac0',
+  rule: '#eeecf9',
+  field: '#f7f6ff',
+  violet: '#6c5ce7',
+  violetDeep: '#4a34c7',
+  violetSoft: '#ebe8ff',
+  violetDim: '#d8d5f0',
+  mint: '#12b886',
+  idle: '#c3c0e2',
+  dangerBg: '#fee7ea',
+  dangerInk: '#b0233f',
+};
+
+const MONO = 'ui-monospace';
+
+const SHADOW_SM = {
+  shadowColor: '#151233',
+  shadowOpacity: 0.06,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+};
+
+const SHADOW_LG = {
+  shadowColor: '#151233',
+  shadowOpacity: 0.14,
+  shadowRadius: 22,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 6,
+};
 
 function iconForCategory(cat) {
   const key = `${cat?.code || ''} ${cat?.name || ''}`.toLowerCase();
@@ -35,6 +76,64 @@ function iconForCategory(cat) {
   if (key.includes('slow')) return 'loader';
   if (key.includes('website')) return 'globe';
   return 'more-horizontal';
+}
+
+function formatBandwidth(bandwidth) {
+  const n = Number(bandwidth);
+  if (!bandwidth || Number.isNaN(n)) return '';
+  if (n >= 1000) return `${+(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)} Gbps`;
+  return `${n} Mbps`;
+}
+
+function SectionLabel({ children, required, meta }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: meta ? 'space-between' : 'flex-start',
+        gap: 7,
+        paddingHorizontal: 4,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 7 }}>
+        <Text
+          className="font-sans-semibold"
+          style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.sub }}
+        >
+          {children}
+        </Text>
+        {required ? (
+          <Text className="font-sans-semibold" style={{ fontSize: 10.5, color: C.violet }}>
+            Required
+          </Text>
+        ) : null}
+      </View>
+      {meta ? (
+        <Text style={{ fontFamily: MONO, fontSize: 10.5, color: C.muted }}>{meta}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function ErrorBanner({ children }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 9,
+        backgroundColor: C.dangerBg,
+        borderRadius: 18,
+        padding: 14,
+      }}
+    >
+      <Feather name="alert-circle" size={17} color={C.dangerInk} style={{ marginTop: 1 }} />
+      <Text className="font-sans-medium" style={{ flex: 1, fontSize: 13, lineHeight: 19, color: C.dangerInk }}>
+        {children}
+      </Text>
+    </View>
+  );
 }
 
 export default function RaiseTicketForm({ role, listPath }) {
@@ -56,6 +155,7 @@ export default function RaiseTicketForm({ role, listPath }) {
   const [alternateEmails, setAlternateEmails] = useState([]);
   const [message, setMessage] = useState('');
   const [messageFocused, setMessageFocused] = useState(false);
+  const [ccFocused, setCcFocused] = useState(false);
   const [images, setImages] = useState([]);
 
   const { mutate, isPending, error } = useCreateTicket();
@@ -134,9 +234,44 @@ export default function RaiseTicketForm({ role, listPath }) {
       selectionLimit: MAX_IMAGES - images.length,
       quality: 0.7,
     });
-    if (!result.canceled) {
-      setImages((prev) => [...prev, ...result.assets]);
+    if (result.canceled) return;
+
+    const compressed = await Promise.all(
+      result.assets.map(async (asset) => {
+        const manipulated = await ImageManipulator.manipulateAsync(
+          asset.uri,
+          [{ resize: { width: 1280 } }],
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        haptics.light();
+        return { ...asset, uri: manipulated.uri };
+      })
+    );
+    setImages((prev) => [...prev, ...compressed]);
+  };
+
+  const captureImage = async () => {
+    if (images.length >= MAX_IMAGES) return;
+
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        'Camera permission needed',
+        'Enable camera access in your device settings to take a photo.'
+      );
+      return;
     }
+
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (result.canceled) return;
+
+    const manipulated = await ImageManipulator.manipulateAsync(
+      result.assets[0].uri,
+      [{ resize: { width: 1280 } }],
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+    );
+
+    setImages((prev) => [...prev, { ...result.assets[0], uri: manipulated.uri }]);
   };
 
   const removeImage = (uri) => {
@@ -152,17 +287,26 @@ export default function RaiseTicketForm({ role, listPath }) {
 
   const handleSubmit = () => {
     const validationError = validate();
+
     if (validationError) {
       Alert.alert('Hold up', validationError);
       return;
     }
 
     const formData = new FormData();
-    if (isSales) formData.append('customerEmail', verifiedEmail);
-    formData.append('issueCategoryId', category.id);
-    formData.append('circuitDescription', selectedCircuit.fabCircuitId);
+
+    // Explicitly cast IDs and other fields to Strings
+    if (isSales) formData.append('customerEmail', String(verifiedEmail));
+    formData.append('issueCategoryId', String(category.id));
+    formData.append('circuitDescription', String(selectedCircuit.fabCircuitId));
+
     if (message.trim()) formData.append('message', message.trim());
-    alternateEmails.forEach((email) => formData.append('alternateEmail', email));
+
+    if (alternateEmails.length === 1) {
+      formData.append('alternateEmail', String(alternateEmails[0]));
+    } else {
+      alternateEmails.forEach((email) => formData.append('alternateEmail', String(email)));
+    }
 
     images.forEach((img, index) => {
       formData.append('files', {
@@ -172,9 +316,20 @@ export default function RaiseTicketForm({ role, listPath }) {
       });
     });
 
+
     mutate(formData, {
       onSuccess: () => {
+        haptics.success();
         router.replace(listPath);
+      },
+      onError: (err) => {
+        haptics.error();
+        Alert.alert(
+          'Server Error',
+          err?.response?.data?.details
+            ? err.response.data.details.map((d) => `${d.path}: ${d.message}`).join('\n')
+            : JSON.stringify(err?.response?.data || err.message)
+        );
       },
     });
   };
@@ -184,69 +339,88 @@ export default function RaiseTicketForm({ role, listPath }) {
   const headerSubtitle =
     isSales && !isVerified
       ? "Enter the customer's email to pull up their circuits."
-      : "Pick a category and tell us a bit more — we'll route it to the right person.";
+      : 'Pick a category and tell us a bit more — we route it from there.';
+
+  const ready = !validate();
+  const submitLine = ready
+    ? `${category?.name} · ${selectedCircuit?.fabCircuitId}`
+    : validate();
+
+  const circuitMeta = selectedCircuit
+    ? [
+      selectedCircuit.serviceType,
+      formatBandwidth(selectedCircuit.bandwidth),
+      selectedCircuit.installationCode || selectedCircuit.aEndBtsId,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    : 'Required';
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-bg-base"
+      style={{ flex: 1, backgroundColor: C.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Conversational header */}
-      <View className="pt-8 pb-2 px-6">
-        <Text className="font-sans-semibold text-text-primary text-3xl leading-9">
+      <View style={{ paddingTop: 34, paddingBottom: 6, paddingHorizontal: 20 }}>
+        <Text
+          className="font-sans-semibold"
+          style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.violetDeep }}
+        >
+          New ticket
+        </Text>
+        <Text
+          className="font-sans-semibold"
+          style={{ fontSize: 29, lineHeight: 34, color: C.ink, marginTop: 4 }}
+        >
           {headerTitle}
         </Text>
-        <Text className="font-sans text-text-secondary mt-1.5 text-base">{headerSubtitle}</Text>
+        <Text className="font-sans" style={{ fontSize: 13, lineHeight: 19, color: C.sub, marginTop: 6 }}>
+          {headerSubtitle}
+        </Text>
       </View>
 
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 24, gap: 24, paddingBottom: 160 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 170, gap: 18 }}
         keyboardShouldPersistTaps="handled"
       >
         {/* ---------------- SALES: STEP 1 — VERIFICATION ---------------- */}
         {isSales && !isVerified && (
           <>
             {verifyMutation.isError && (
-              <View className="bg-error-bg rounded-2xl p-4 flex-row items-start">
-                <Feather
-                  name="alert-circle"
-                  size={18}
-                  color="#E0311F"
-                  style={{ marginTop: 2, marginRight: 8 }}
-                />
-                <Text className="font-sans text-error-text flex-1 leading-5">
-                  {verifyMutation.error?.message ||
-                    'Something went wrong looking up this customer.'}
-                </Text>
-              </View>
+              <ErrorBanner>
+                {verifyMutation.error?.message || 'Something went wrong looking up this customer.'}
+              </ErrorBanner>
             )}
 
             {noResultsForEmail && (
-              <View className="bg-error-bg rounded-2xl p-4 flex-row items-start">
-                <Feather
-                  name="alert-circle"
-                  size={18}
-                  color="#E0311F"
-                  style={{ marginTop: 2, marginRight: 8 }}
-                />
-                <Text className="font-sans text-error-text flex-1 leading-5">
-                  No connections found for this email. Double-check the address and try again.
-                </Text>
-              </View>
+              <ErrorBanner>
+                No connections found for this email. Double-check the address and try again.
+              </ErrorBanner>
             )}
 
-            <View style={{ gap: 8 }}>
-              <Text className="font-sans-semibold text-text-primary text-sm ml-1">
-                Customer Email <Text className="text-primary-500">*</Text>
-              </Text>
+            <View style={{ gap: 10 }}>
+              <SectionLabel required>Customer email</SectionLabel>
               <View
-                className={`bg-surface rounded-2xl border shadow-sm ${
-                  emailFocused ? 'border-text-secondary' : 'border-border'
-                }`}
+                style={[
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    backgroundColor: C.card,
+                    borderRadius: 999,
+                    borderWidth: 1.5,
+                    borderColor: emailFocused ? C.violet : 'transparent',
+                    paddingHorizontal: 16,
+                    minHeight: 54,
+                  },
+                  SHADOW_SM,
+                ]}
               >
+                <Feather name="mail" size={16} color={C.muted} />
                 <TextInput
                   value={customerEmail}
                   onChangeText={(v) => {
@@ -257,11 +431,12 @@ export default function RaiseTicketForm({ role, listPath }) {
                   onBlur={() => setEmailFocused(false)}
                   onSubmitEditing={handleVerify}
                   placeholder="name@customer.com"
-                  placeholderTextColor="#948A7C"
+                  placeholderTextColor={C.muted}
                   autoCapitalize="none"
                   keyboardType="email-address"
                   editable={!verifyMutation.isPending}
-                  className="font-sans text-text-primary text-base px-5 h-14"
+                  className="font-sans"
+                  style={{ flex: 1, minWidth: 0, fontSize: 14, color: C.ink, paddingVertical: 14 }}
                 />
               </View>
             </View>
@@ -270,18 +445,27 @@ export default function RaiseTicketForm({ role, listPath }) {
               activeOpacity={0.88}
               onPress={handleVerify}
               disabled={verifyMutation.isPending}
-              className={`h-14 rounded-full flex-row items-center justify-center ${
-                verifyMutation.isPending ? 'bg-primary-200' : 'bg-primary-500 shadow-lg'
-              }`}
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  minHeight: 54,
+                  borderRadius: 999,
+                  backgroundColor: verifyMutation.isPending ? C.violetDim : C.violet,
+                },
+                verifyMutation.isPending ? null : SHADOW_LG,
+              ]}
             >
               {verifyMutation.isPending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <>
-                  <Text className="font-sans-semibold text-text-on-brand text-base mr-1.5">
-                    Verify Customer
+                  <Text className="font-sans-semibold" style={{ fontSize: 14.5, color: '#ffffff' }}>
+                    Verify customer
                   </Text>
-                  <Feather name="arrow-up-right" size={16} color="#FFFFFF" />
+                  <Feather name="arrow-up-right" size={15} color="#ffffff" />
                 </>
               )}
             </TouchableOpacity>
@@ -292,29 +476,40 @@ export default function RaiseTicketForm({ role, listPath }) {
         {isVerified && (
           <>
             {error && (
-              <View className="bg-error-bg rounded-2xl p-4 flex-row items-start">
-                <Feather
-                  name="alert-circle"
-                  size={18}
-                  color="#E0311F"
-                  style={{ marginTop: 2, marginRight: 8 }}
-                />
-                <Text className="font-sans text-error-text flex-1 leading-5">
-                  {error.message || 'Something went wrong.'}
-                </Text>
-              </View>
+              <ErrorBanner>
+                {error?.response?.data?.details?.length
+                  ? error.response.data.details.map((d) => `${d.path}: ${d.message}`).join('  •  ')
+                  : error?.response?.data?.message || error.message || 'Something went wrong.'}
+              </ErrorBanner>
             )}
 
             {isSales && (
-              <View className="flex-row items-center justify-between bg-primary-50 rounded-2xl px-4 py-3.5 border border-primary-100">
-                <View className="flex-row items-center flex-1 mr-3" style={{ gap: 8 }}>
-                  <Feather name="check-circle" size={16} color="#FF5A36" />
-                  <View className="flex-1">
-                    <Text className="font-sans-semibold text-[10px] text-primary-600 uppercase tracking-wide">
-                      Verified Customer
+              <View
+                style={[
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    backgroundColor: C.violetSoft,
+                    borderRadius: 20,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 }}>
+                  <Feather name="check-circle" size={16} color={C.violetDeep} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      className="font-sans-semibold"
+                      style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: C.violetDeep }}
+                    >
+                      Verified customer
                     </Text>
                     <Text
-                      className="font-sans-semibold text-text-primary text-sm"
+                      className="font-sans-semibold"
+                      style={{ fontSize: 13, color: C.ink, marginTop: 2 }}
                       numberOfLines={1}
                     >
                       {verifiedEmail}
@@ -322,27 +517,23 @@ export default function RaiseTicketForm({ role, listPath }) {
                   </View>
                 </View>
                 <TouchableOpacity onPress={handleResetVerification} activeOpacity={0.7}>
-                  <Text className="font-sans-semibold text-primary-600 text-sm">Change</Text>
+                  <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.violetDeep }}>
+                    Change
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Tactile category chips — horizontal scroll */}
-            <View style={{ gap: 8 }}>
-              <Text className="font-sans-semibold text-text-primary text-sm ml-1">
-                Issue Category <Text className="text-primary-500">*</Text>
-              </Text>
+            {/* Category — full grid, nothing hidden off-screen */}
+            <View style={{ gap: 10 }}>
+              <SectionLabel required>Category</SectionLabel>
 
               {categoriesLoading ? (
-                <View className="h-14 items-center justify-center">
-                  <ActivityIndicator color="#FF5A36" />
+                <View style={{ height: 56, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator color={C.violet} />
                 </View>
               ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingRight: 8, gap: 10 }}
-                >
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
                   {(categories || []).map((cat) => {
                     const isSelected = category?.id === cat.id;
                     return (
@@ -350,48 +541,99 @@ export default function RaiseTicketForm({ role, listPath }) {
                         key={cat.id}
                         activeOpacity={0.85}
                         onPress={() => setCategory(cat)}
-                        className={`flex-row items-center px-4 py-3 rounded-full border-2 ${
-                          isSelected ? 'border-primary-500 bg-primary-50' : 'border-border bg-surface'
-                        }`}
+                        style={{
+                          width: '48.4%',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 9,
+                          minHeight: 52,
+                          padding: 12,
+                          borderRadius: 18,
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? C.ink : C.rule,
+                          backgroundColor: isSelected ? C.ink : C.card,
+                        }}
                       >
                         <Feather
                           name={iconForCategory(cat)}
-                          size={15}
-                          color={isSelected ? '#FF5A36' : '#5C5348'}
-                          style={{ marginRight: 6 }}
+                          size={17}
+                          color={isSelected ? C.idle : C.sub}
                         />
                         <Text
-                          className={`font-sans-semibold text-sm ${
-                            isSelected ? 'text-primary-700' : 'text-text-primary'
-                          }`}
-                          numberOfLines={1}
+                          className="font-sans-semibold"
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 12.5,
+                            lineHeight: 15,
+                            color: isSelected ? '#ffffff' : C.ink,
+                          }}
                         >
                           {cat.name}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </View>
               )}
             </View>
 
-            {/* Circuit selection */}
-            <View style={{ gap: 8 }}>
-              <Text className="font-sans-semibold text-text-primary text-sm ml-1">
-                Circuit Description <Text className="text-primary-500">*</Text>
-              </Text>
+            {/* Affected circuit */}
+            <View style={{ gap: 10 }}>
+              <SectionLabel required>Affected circuit</SectionLabel>
               <Pressable
                 onPress={() => setCircuitPickerOpen(true)}
-                className="flex-row items-center justify-between bg-surface border border-border rounded-2xl px-5 h-14 shadow-sm"
+
+                style={({ pressed }) => [
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    backgroundColor: C.card,
+                    borderRadius: 20,
+                    padding: 14,
+                    minHeight: 64,
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                  SHADOW_SM,
+                ]}
+                className={`flex-row gap-[12px] p-[14px] rounded-[12px] min-h-[64px] bg-white`}
               >
-                <Text
-                  className={`font-sans text-base ${
-                    selectedCircuit ? 'text-text-primary' : 'text-text-tertiary'
-                  }`}
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 13,
+                    backgroundColor: C.violetSoft,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+
                 >
-                  {selectedCircuit ? selectedCircuit.fabCircuitId : 'Select Circuit ID'}
-                </Text>
-                <Feather name="chevron-down" size={20} color="#5C5348" />
+                  <Feather name="server" size={17} color={C.violetDeep} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }} >
+                  <Text
+                    style={{
+                      fontFamily: MONO,
+                      fontWeight: '700',
+                      fontSize: 14,
+                      letterSpacing: -0.3,
+                      color: selectedCircuit ? C.ink : C.muted,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {selectedCircuit ? selectedCircuit.fabCircuitId : 'Choose the affected circuit'}
+                  </Text>
+                  <Text
+                    className="font-sans-medium"
+                    style={{ fontSize: 11, color: C.muted, marginTop: 3 }}
+                    numberOfLines={1}
+                  >
+                    {circuitMeta}
+                  </Text>
+                </View>
+                <Feather name="chevron-down" size={17} color={C.muted} />
               </Pressable>
 
               <ConnectionPicker
@@ -403,73 +645,125 @@ export default function RaiseTicketForm({ role, listPath }) {
               />
             </View>
 
-            {/* Premium description input */}
-            <View style={{ gap: 8 }}>
-              <Text className="font-sans-semibold text-text-primary text-sm ml-1">
-                Description
-              </Text>
+            {/* Description */}
+            <View style={{ gap: 10 }}>
+              <SectionLabel meta={`${message.length}/${MAX_MESSAGE}`}>What is happening</SectionLabel>
               <View
-                className={`bg-surface rounded-2xl border shadow-sm ${
-                  messageFocused ? 'border-text-secondary' : 'border-border'
-                }`}
+                style={[
+                  {
+                    backgroundColor: C.card,
+                    borderRadius: 20,
+                    borderWidth: 1.5,
+                    borderColor: messageFocused ? C.violet : 'transparent',
+                    padding: 14,
+                  },
+                  SHADOW_SM,
+                ]}
               >
                 <TextInput
                   value={message}
                   onChangeText={setMessage}
                   onFocus={() => setMessageFocused(true)}
                   onBlur={() => setMessageFocused(false)}
-                  placeholder="What exactly is going wrong?"
-                  placeholderTextColor="#948A7C"
+                  maxLength={MAX_MESSAGE}
+                  placeholder="Since when, which sites are affected, anything you already tried…"
+                  placeholderTextColor={C.muted}
                   multiline
                   textAlignVertical="top"
-                  className="font-sans text-text-primary text-base p-4 min-h-[140px]"
+                  className="font-sans"
+                  style={{ minHeight: 104, fontSize: 13.5, lineHeight: 20, color: C.ink }}
                 />
               </View>
             </View>
 
             {/* CC emails */}
-            <View style={{ gap: 8 }}>
-              <Text className="font-sans-semibold text-text-primary text-sm ml-1">
-                CC Emails{' '}
-                <Text className="font-sans text-text-tertiary">
-                  ({alternateEmails.length}/{MAX_ALTERNATE_EMAILS})
-                </Text>
-              </Text>
-              <View className="flex-row" style={{ gap: 12 }}>
-                <View className="flex-1 bg-surface border border-border rounded-2xl shadow-sm">
+            <View style={{ gap: 10 }}>
+              <SectionLabel meta={`${alternateEmails.length}/${MAX_ALTERNATE_EMAILS}`}>
+                Keep in the loop
+              </SectionLabel>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View
+                  style={[
+                    {
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      backgroundColor: C.card,
+                      borderRadius: 999,
+                      borderWidth: 1.5,
+                      borderColor: ccFocused ? C.violet : 'transparent',
+                      paddingHorizontal: 16,
+                      minHeight: 52,
+                    },
+                    SHADOW_SM,
+                  ]}
+                >
+                  <Feather name="mail" size={16} color={C.muted} />
                   <TextInput
                     value={alternateEmailInput}
                     onChangeText={setAlternateEmailInput}
+                    onFocus={() => setCcFocused(true)}
+                    onBlur={() => setCcFocused(false)}
                     placeholder="team@company.com"
-                    placeholderTextColor="#948A7C"
+                    placeholderTextColor={C.muted}
                     autoCapitalize="none"
                     keyboardType="email-address"
                     onSubmitEditing={addAlternateEmail}
-                    className="font-sans text-text-primary text-base px-5 h-14"
+                    className="font-sans"
+                    style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: C.ink, paddingVertical: 13 }}
                   />
                 </View>
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={addAlternateEmail}
-                  className="bg-text-primary w-14 h-14 rounded-2xl items-center justify-center shadow-sm"
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: C.ink,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                 >
-                  <Feather name="plus" size={22} color="#FFFFFF" />
+                  <Feather name="plus" size={18} color={C.bg} />
                 </TouchableOpacity>
               </View>
 
               {alternateEmails.length > 0 && (
-                <View className="flex-row flex-wrap" style={{ gap: 8, marginTop: 4 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {alternateEmails.map((email) => (
                     <View
                       key={email}
-                      className="flex-row items-center bg-surface px-3 py-2.5 rounded-full border border-border shadow-sm"
+                      style={[
+                        {
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          backgroundColor: C.card,
+                          borderRadius: 999,
+                          paddingLeft: 14,
+                          paddingRight: 10,
+                          paddingVertical: 8,
+                        },
+                        SHADOW_SM,
+                      ]}
                     >
-                      <Text className="font-sans text-sm text-text-secondary mr-2">{email}</Text>
+                      <Text className="font-sans-medium" style={{ fontSize: 12, color: C.inkSoft }}>
+                        {email}
+                      </Text>
                       <Pressable
                         onPress={() => removeAlternateEmail(email)}
-                        className="p-0.5 bg-bg-subtle rounded-full"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: C.bg,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
                       >
-                        <Feather name="x" size={13} color="#5C5348" />
+                        <Feather name="x" size={12} color={C.sub} />
                       </Pressable>
                     </View>
                   ))}
@@ -478,70 +772,168 @@ export default function RaiseTicketForm({ role, listPath }) {
             </View>
 
             {/* Attachments */}
-            <View style={{ gap: 8 }}>
-              <Text className="font-sans-semibold text-text-primary text-sm ml-1">
-                Attachments{' '}
-                <Text className="font-sans text-text-tertiary">
-                  ({images.length}/{MAX_IMAGES})
-                </Text>
-              </Text>
-              <View className="flex-row flex-wrap" style={{ gap: 12 }}>
-                {images.map((img) => (
-                  <View key={img.uri} className="relative">
-                    <Image
-                      source={{ uri: img.uri }}
-                      className="w-20 h-20 rounded-2xl bg-bg-subtle border border-border"
-                    />
-                    <Pressable
-                      onPress={() => removeImage(img.uri)}
-                      className="absolute -top-2 -right-2 bg-surface rounded-full p-1 shadow-sm border border-border"
-                    >
-                      <View className="bg-error-text rounded-full p-1">
-                        <Feather name="x" size={12} color="#FFFFFF" />
-                      </View>
-                    </Pressable>
-                  </View>
-                ))}
+            <View style={{ gap: 10 }}>
+              <SectionLabel meta={`${images.length}/${MAX_IMAGES}`}>Screenshots</SectionLabel>
 
-                {images.length < MAX_IMAGES && (
+              {images.length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  {images.map((img) => (
+                    <View key={img.uri} style={{ width: 80, height: 80 }}>
+                      <Image
+                        source={{ uri: img.uri }}
+                        style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 16,
+                          backgroundColor: C.violetSoft,
+                        }}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                      />
+                      <Pressable
+                        onPress={() => removeImage(img.uri)}
+                        style={{
+                          position: 'absolute',
+                          top: -6,
+                          right: -6,
+                          width: 24,
+                          height: 24,
+                          borderRadius: 12,
+                          backgroundColor: C.dangerInk,
+                          borderWidth: 2.5,
+                          borderColor: C.bg,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Feather name="x" size={11} color="#ffffff" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {images.length < MAX_IMAGES && (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+
                   <Pressable
                     onPress={pickImages}
-                    className="w-20 h-20 rounded-2xl border-2 border-dashed border-border-strong bg-bg-subtle items-center justify-center"
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      minHeight: 58,
+                      borderRadius: 18,
+                      borderWidth: 1.5,
+                      borderStyle: 'dashed',
+                      borderColor: C.violetDim,
+                      backgroundColor: pressed ? C.field : C.card,
+                    })}
+                    className='flex-row items-center justify-center gap-2 min-h-[58px] rounded-[18px] border-dashed border bg-white flex-1 border-[#d8d5f0]'
                   >
-                    <Feather name="image" size={22} color="#948A7C" />
-                    <Text className="font-sans-semibold text-[10px] text-text-tertiary mt-1.5 uppercase tracking-wide">
-                      Add
+                    <Feather name="image" size={17} color={C.violetDeep} />
+                    <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.violetDeep }}>
+                      Gallery
                     </Text>
                   </Pressable>
-                )}
-              </View>
-            </View>
 
-            {/* Submit — last element in the ScrollView, separated with mt-8,
-                cleared from the floating tab bar via the container's
-                paddingBottom: 160 above. */}
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={handleSubmit}
-              disabled={isPending}
-              className={`h-14 rounded-full flex-row items-center justify-center mt-8 ${
-                isPending ? 'bg-primary-200' : 'bg-primary-500 shadow-lg'
-              }`}
-            >
-              {isPending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text className="font-sans-semibold text-text-on-brand text-base mr-1.5">
-                    Submit Ticket
-                  </Text>
-                  <Feather name="arrow-up-right" size={16} color="#FFFFFF" />
-                </>
+                  <Pressable
+                    onPress={captureImage}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      minHeight: 58,
+                      borderRadius: 18,
+                      borderWidth: 1.5,
+                      borderStyle: 'dashed',
+                      borderColor: C.violetDim,
+                      backgroundColor: pressed ? C.field : C.card,
+                    })}
+                    className='flex-row items-center justify-center gap-2 min-h-[58px] rounded-[18px] border-dashed border bg-white flex-1 border-[#d8d5f0]'
+                  >
+                    <Feather name="camera" size={17} color={C.violetDeep} />
+                    <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.violetDeep }}>
+                      Camera
+                    </Text>
+                  </Pressable>
+                </View>
               )}
-            </TouchableOpacity>
+            </View>
           </>
         )}
       </ScrollView>
+
+      {/* Sticky submit bar — states what is still missing instead of a dead button */}
+      {isVerified && (
+        <View
+          style={[
+            {
+              position: 'absolute',
+              left: 14,
+              right: 14,
+              bottom: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              backgroundColor: C.card,
+              borderRadius: 28,
+              paddingLeft: 18,
+              padding: 12,
+            },
+            SHADOW_LG,
+          ]}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              className="font-sans-semibold"
+              style={{ fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: C.muted }}
+            >
+              Ticket
+            </Text>
+            <Text
+              className="font-sans-semibold"
+              style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}
+              numberOfLines={1}
+            >
+              {submitLine}
+            </Text>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={handleSubmit}
+            disabled={isPending}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              minHeight: 52,
+              paddingHorizontal: 20,
+              borderRadius: 999,
+              backgroundColor: ready && !isPending ? C.violet : C.violetDim,
+            }}
+          >
+            {isPending ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <Text
+                  className="font-sans-semibold"
+                  style={{ fontSize: 14, color: ready ? '#ffffff' : C.muted }}
+                >
+                  Submit
+                </Text>
+                <Feather name="arrow-up-right" size={15} color={ready ? '#ffffff' : C.muted} />
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }

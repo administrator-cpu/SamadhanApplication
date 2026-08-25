@@ -23,8 +23,6 @@ export const ticketService = {
   },
 
   addTicketEvent: async (id, payload) => {
-    // Attachments are sent as multipart form-data (same convention as the
-    // RCA and ticket-creation endpoints); plain text-only replies stay JSON.
     const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
     const { data } = await apiClient.post(
       `/tickets/${id}/events`,
@@ -38,7 +36,10 @@ export const ticketService = {
     );
     return data.data;
   },
-
+updateReplyStatus: async (id, allowCustomerReply) => {
+  const { data } = await apiClient.patch(`/tickets/${id}/reply-status`, { allowCustomerReply });
+  return data.data;
+},
   updateTicketStatus: async (id, payload) => {
     const { data } = await apiClient.patch(`/tickets/${id}/status`, payload);
     return data.data;
@@ -79,10 +80,12 @@ export const ticketService = {
     return data.data;
   },
 
-  createTicket: async (formData) => {
-    const { data } = await apiClient.post('/tickets', formData);
-    return data.data;
-  },
+createTicket: async (formData) => {
+  const { data } = await apiClient.post('/tickets', formData, {
+    transformRequest: (d) => d,
+  });
+  return data.data;
+},
   getResolvedTickets: async (params = {}) => {
     const { data } = await apiClient.get('/tickets/resolved', { params });
     return data.data;
@@ -92,6 +95,7 @@ export const ticketService = {
     const { data } = await apiClient.get('/tickets/earliest-year');
     return data.data;
   },
+  
   getResolvedTicketsForExport: async (year, month) => {
     const { data } = await apiClient.get('/tickets/resolved', {
       params: { exportAll: true, year, month },

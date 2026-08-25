@@ -1,9 +1,19 @@
 // src/components/TicketRating.js
-import { useState, useEffect } from 'react';
-import { View, Text, Pressable, TextInput, ActivityIndicator, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useAuthStore } from '../store/authStore';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRateTicket } from '../hooks/useTickets';
+import { useAuthStore } from '../store/authStore';
+import { haptics } from '../utils/haptics';
+import { CARD_SHADOW, T } from './ticketTheme';
+
+const FACES = [
+  { value: 1, label: 'Poor' },
+  { value: 2, label: 'Fair' },
+  { value: 3, label: 'Okay' },
+  { value: 4, label: 'Good' },
+  { value: 5, label: 'Great' },
+];
 
 export default function TicketRating({ ticket }) {
   const user = useAuthStore((state) => state.user);
@@ -28,33 +38,45 @@ export default function TicketRating({ ticket }) {
     if (rating < 1) return;
     mutate(
       { rating, feedback: feedback.trim() || undefined },
-      { onSuccess: () => setSubmitted(true) }
+      {
+        onSuccess: () => {
+          haptics.success();
+          setSubmitted(true);
+        },
+        onError: () => haptics.error(),
+      }
     );
   };
 
+  const activeLabel = FACES.find((f) => f.value === rating)?.label;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{submitted ? 'Your Rating' : 'Rate This Ticket'}</Text>
+    <View style={styles.card}>
+      <Text style={styles.title}>{submitted ? 'Thanks for the feedback' : 'How did we do?'}</Text>
+      <Text style={styles.subtitle}>
+        {submitted ? 'You can change this any time.' : 'One tap is enough — a note is optional.'}
+      </Text>
 
       <View style={styles.starsRow}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Pressable
-            key={star}
-            onPress={() => {
-              setRating(star);
-              setSubmitted(false); // allow editing an existing rating
-            }}
-            hitSlop={6}
-          >
-            <Feather
-              name="star"
-              size={30}
-              color={star <= rating ? '#f59e0b' : '#e2e8f0'}
-              style={star <= rating ? styles.starFilled : undefined}
-            />
-          </Pressable>
-        ))}
+        {FACES.map((face) => {
+          const filled = face.value <= rating;
+          return (
+            <Pressable
+              key={face.value}
+              onPress={() => {
+                setRating(face.value);
+                setSubmitted(false); // allow editing an existing rating
+              }}
+              hitSlop={8}
+              style={[styles.starTap, filled ? styles.starTapActive : null]}
+            >
+              <Feather name="star" size={24} color={filled ? T.amber : '#D7DEE9'} />
+            </Pressable>
+          );
+        })}
       </View>
+
+      {activeLabel ? <Text style={styles.ratingLabel}>{activeLabel}</Text> : null}
 
       <TextInput
         value={feedback}
@@ -62,8 +84,8 @@ export default function TicketRating({ ticket }) {
           setFeedback(text);
           setSubmitted(false);
         }}
-        placeholder="Optional feedback..."
-        placeholderTextColor="#9ca3af"
+        placeholder="Anything you'd like to add? (optional)"
+        placeholderTextColor={T.hint}
         multiline
         style={styles.input}
       />
@@ -71,12 +93,12 @@ export default function TicketRating({ ticket }) {
       <Pressable
         onPress={handleSubmit}
         disabled={rating < 1 || isPending}
-        style={[styles.submitButton, (rating < 1 || isPending) && styles.submitDisabled]}
+        style={[styles.submit, (rating < 1 || isPending) && styles.submitDisabled]}
       >
         {isPending ? (
-          <ActivityIndicator size="small" color="#ffffff" />
+          <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
-          <Text style={styles.submitText}>{submitted ? 'Update Feedback' : 'Submit Rating'}</Text>
+          <Text style={styles.submitText}>{submitted ? 'Update feedback' : 'Send feedback'}</Text>
         )}
       </Pressable>
     </View>
@@ -84,35 +106,39 @@ export default function TicketRating({ ticket }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  card: {
+    backgroundColor: T.surface,
+    borderRadius: 22,
+    padding: 19,
+    marginTop: 14,
+    marginBottom: 4,
+    ...CARD_SHADOW,
   },
-  title: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
-  starsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  starFilled: {},
+  title: { fontSize: 15.5, fontWeight: '700', letterSpacing: -0.3, color: T.ink, textAlign: 'center' },
+  subtitle: { fontSize: 12, color: T.muted, textAlign: 'center', marginTop: 4 },
+  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 16 },
+  starTap: { width: 44, height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  starTapActive: { backgroundColor: T.amberTint },
+  ratingLabel: { fontSize: 12.5, fontWeight: '700', color: T.amberInk, textAlign: 'center', marginTop: 8 },
   input: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: T.field,
+    borderRadius: 16,
+    padding: 14,
     fontSize: 14,
-    minHeight: 60,
+    lineHeight: 20,
+    color: T.ink,
+    minHeight: 72,
     textAlignVertical: 'top',
-    marginBottom: 12,
-    backgroundColor: '#f8fafc',
+    marginTop: 14,
   },
-  submitButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 10,
-    paddingVertical: 12,
+  submit: {
+    backgroundColor: T.ink,
+    borderRadius: 999,
+    height: 50,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
   },
-  submitDisabled: { backgroundColor: '#93c5fd' },
-  submitText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+  submitDisabled: { opacity: 0.4 },
+  submitText: { fontSize: 14.5, fontWeight: '700', color: '#FFFFFF' },
 });

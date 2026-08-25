@@ -1,255 +1,462 @@
 // app/(admin)/index.js
 import React, { useMemo } from 'react';
-import { View, Text, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { useAdminStats } from '../../src/hooks/useAdminStats';
+import LoadingState from '../../src/components/ui/LoadingState';
+import ErrorState from '../../src/components/ui/ErrorState';
+import InitializingScreen from '../../src/components/InitializingScreen.js';
+const C = {
+  ground: '#F3F2FD',
+  ink: '#151233',
+  inkSoft: '#2B2359',
+  card: '#FFFFFF',
+  hair: '#F0EEFB',
+  text: '#151233',
+  muted: '#6D6A96',
+  faint: '#9D9AC0',
+  violet: '#4A34C7',
+  violetTint: '#EBE8FF',
+  violetLift: '#B6A9FF',
+  violetMid: '#6C5CE7',
+  violetDeep: '#3A2F7A',
+  green: '#0F7A56',
+  greenInk: '#0B3B2C',
+  greenTint: '#CCF7E4',
+  greenWash: '#F6FDF9',
+  red: '#B3261E',
+  redDot: '#E5534B',
+  redTint: '#FFE1E1',
+};
 
 export default function AdminDashboard() {
   const user = useAuthStore((state) => state.user);
-
   const { data: stats, isLoading, isError, error, refetch, isRefetching } = useAdminStats();
 
   const categories = stats?.categories || [];
-
-  const maxCategoryCount = useMemo(() => {
-    return Math.max(...categories.map((c) => Number(c.count) || 0), 1);
-  }, [categories]);
-
-  if (isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator size="large" color="#FF5A36" />
-        <Text className="font-sans-medium text-slate-500 mt-4">Loading Dashboard...</Text>
-      </View>
-    );
-  }
-
-  if (isError) {
-    return (
-      <View className="flex-1 items-center justify-center bg-slate-50 px-6">
-        <Feather name="alert-circle" size={48} color="#E11D48" style={{ marginBottom: 16 }} />
-        <Text className="font-sans-semibold text-rose-600 text-center text-lg mb-2">
-          Oops! Something went wrong.
-        </Text>
-        <Text className="font-sans text-slate-500 text-center text-sm">
-          {error?.message || 'Failed to load dashboard stats.'}
-        </Text>
-      </View>
-    );
-  }
-
   const summary = stats?.summary || {};
   const agents = stats?.agents || [];
 
+  // Top four named categories + a single "Everything else" remainder, so the
+  // long tail is shown instead of silently dropped.
+  const bars = useMemo(() => {
+    const sorted = [...categories].sort(
+      (a, b) => (Number(b.count) || 0) - (Number(a.count) || 0)
+    );
+    const top = sorted.slice(0, 4).map((c) => ({
+      label: c.name || '—',
+      count: Number(c.count) || 0,
+    }));
+    const rest = sorted.slice(4).reduce((sum, c) => sum + (Number(c.count) || 0), 0);
+    const list = rest > 0 ? [...top, { label: 'Everything else', count: rest, rest: true }] : top;
+    const max = Math.max(...list.map((b) => b.count), 1);
+    return list.map((b) => ({ ...b, pct: b.count / max }));
+  }, [categories]);
+
+  // Ranked by lifetime handled — total_assigned is a record, not a capacity.
+  const roster = useMemo(
+    () =>
+      [...agents].sort(
+        (a, b) => (Number(b.total_assigned) || 0) - (Number(a.total_assigned) || 0)
+      ),
+    [agents]
+  );
+
+  if (isLoading) return <LoadingState label="Loading Dashboard..." />;
+
+  if (isError) {
+    return (
+      <ErrorState
+        title="Oops! Something went wrong."
+        message={error?.message || 'Failed to load dashboard stats.'}
+        onRetry={refetch}
+      />
+    );
+  }
+
+  const firstName = user?.name?.split(' ')[0] || 'Admin';
   const userInitials = user?.name ? user.name.charAt(0).toUpperCase() : 'A';
 
-  const topCategory = categories[0];
-  const otherCategories = categories.slice(1, 4);
+  const active = Number(summary.active_tickets) || 0;
+  const escalated = Number(summary.escalated_tickets) || 0;
+  const total = Number(summary.total_tickets) || 0;
+  const topCategory = bars[0];
+  const topShare = total > 0 && topCategory ? Math.round((topCategory.count / total) * 100) : 0;
+
+  const headline =
+    active === 0
+      ? 'Nothing open right now.'
+      : active === 1
+      ? 'One ticket is open.'
+      : `${active} tickets are open.`;
+
+  const subline =
+    escalated > 0
+      ? `${escalated} escalated — those need you first.`
+      : 'Nothing escalated.';
 
   return (
     <ScrollView
-      className="flex-1 bg-slate-50"
-      contentContainerStyle={{ padding: 20, paddingBottom: 160 }}
+      style={{ flex: 1, backgroundColor: C.ground }}
+      contentContainerStyle={{ padding: 16, paddingTop: 36, paddingBottom: 160 }}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5A36" />}
+      refreshControl={
+        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.violet} />
+      }
     >
-      {/* --- HEADER --- */}
-      <View className="flex-row justify-between items-center mb-6 mt-9">
-        <View>
-          <Text className="font-sans-semibold text-slate-900 text-3xl tracking-tight">Dashboard</Text>
-          <Text className="font-sans-medium text-slate-500 mt-1">
-            Welcome back, {user?.name?.split(' ')[0] || 'Admin'}
+      {/* HEADER */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text
+            className="font-sans-semibold"
+            style={{ fontSize: 10.5, letterSpacing: 1.3, textTransform: 'uppercase', color: C.violet }}
+          >
+            Admin
+          </Text>
+          <Text
+            className="font-sans-semibold"
+            style={{ fontSize: 28, lineHeight: 32, letterSpacing: -0.7, color: C.text, marginTop: 4 }}
+          >
+            Hi, {firstName}
+          </Text>
+          <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, marginTop: 7 }}>
+            {headline} {subline}
           </Text>
         </View>
-        <View className="w-10 h-10 rounded-full bg-primary-50 border-2 border-primary-200 items-center justify-center">
-          <Text className="font-sans-semibold text-primary-700 text-sm">{userInitials}</Text>
+        <View
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 999,
+            backgroundColor: C.violetTint,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.violet }}>
+            {userInitials}
+          </Text>
         </View>
       </View>
 
-      {/* --- PLATFORM HEALTH HERO CARD --- */}
-      <View className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-200 mb-6">
-        <View className="flex-row items-center">
-          <View className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
-          <Text className="font-sans-semibold text-slate-500 text-xs uppercase tracking-widest">
-            Live System Status
-          </Text>
-        </View>
-
-        <View className="flex-row mt-4 items-start">
-          {/* Left: Active Issues */}
-          <View className="flex-1">
-            <Text className="font-sans-semibold text-slate-800 text-4xl">
-              {summary.active_tickets ?? '0'}
-            </Text>
-            <View className="flex-row items-center  rounded-lg mt-1 self-start">
-              <Feather name="alert-circle" size={12} color="#EA580C" style={{ marginRight: 5 }} />
-              <Text className="font-sans-semibold text-primary-600 text-xs">Active Issues</Text>
-            </View>
-          </View>
-
-          {/* Divider — balanced horizontal margins */}
-          <View className="w-px bg-slate-100 self-stretch mx-6" />
-
-          {/* Right: Total Tickets */}
-          <View className="flex-1">
-            <Text className="font-sans-semibold text-slate-800 text-4xl">
-              {summary.total_tickets ?? '0'}
-            </Text>
-            <Text className="font-sans-medium text-slate-500 mt-1 text-sm">Total Tickets</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* --- HORIZONTAL INSIGHT ROW --- */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 8 }}
+      {/* LIVE STATE HERO */}
+      <View
+        style={{
+          backgroundColor: C.card,
+          borderRadius: 26,
+          padding: 20,
+          marginTop: 18,
+          shadowColor: '#1A1440',
+          shadowOpacity: 0.06,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 2,
+        }}
       >
-        <InsightChip
-          icon="trending-up"
-          iconColor="#E11D48"
-          iconBg="bg-rose-50"
-          value={summary.escalated_tickets}
-          label="Escalated"
-        />
-        <InsightChip
-          icon="check-circle"
-          iconColor="#059669"
-          iconBg="bg-emerald-50"
-          value={summary.resolved_today}
-          label="Resolved Today"
-        />
-        <InsightChip
-          icon="users"
-          iconColor="#8b5cf6"
-          iconBg="bg-purple-50"
-          value={`${summary.active_agents ?? 0}/${summary.total_agents ?? 0}`}
-          label="Agents Online"
-        />
-        <InsightChip
-          icon="clock"
-          iconColor="#64748B"
-          iconBg="bg-slate-100"
-          value={summary.tickets_last_24h}
-          label="Last 24 Hours"
-        />
-      </ScrollView>
-
-      {/* --- PRIORITY FOCUS CATEGORIES --- */}
-      <View className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-200 mb-6 mt-6">
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="font-sans-semibold text-slate-900 text-lg">Priority Focus</Text>
-          <Feather name="bar-chart-2" size={20} color="#94A3B8" />
-        </View>
-
-        {topCategory && (
-          <View className="bg-primary-50 rounded-xl p-4 mb-4 border border-primary-100 flex-row items-center">
-            <View className="w-10 h-10 bg-white rounded-full items-center justify-center mr-3 shadow-sm">
-              <Feather name="alert-triangle" size={16} color="#EA580C" />
-            </View>
-            <View className="flex-1 pr-2">
-              <Text className="font-sans-semibold text-primary-700 text-[10px] uppercase tracking-widest mb-0.5">
-                Top Issue Category
-              </Text>
-              <Text className="font-sans-semibold text-slate-900 text-lg" numberOfLines={1}>
-                {topCategory.name}
-              </Text>
-            </View>
-            <Text className="font-sans-semibold text-primary-600 text-3xl">
-              {topCategory.count}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 999,
+                marginRight: 7,
+                backgroundColor: active > 0 ? C.redDot : C.green,
+              }}
+            />
+            <Text
+              className="font-sans-semibold"
+              style={{ fontSize: 9.5, letterSpacing: 1.1, textTransform: 'uppercase', color: active > 0 ? C.red : C.green }}
+            >
+              {active > 0 ? 'Open now' : 'All clear'}
             </Text>
           </View>
-        )}
-
-        {otherCategories.map((cat, index) => {
-          const isLast = index === otherCategories.length - 1;
-          return (
-            <View
-              key={cat.name || index}
-              className={`flex-row justify-between items-center py-3 ${
-                isLast ? '' : 'border-b border-slate-100'
-              }`}
-            >
-              <Text className="font-sans-semibold text-slate-700 text-sm">{cat.name}</Text>
-              <Text className="font-sans-semibold text-slate-900 text-sm bg-slate-50 px-2 py-1 rounded-md">
-                {cat.count}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-
-      {/* --- LIVE ROSTER (AGENT WORKLOAD) --- */}
-      <View className="bg-white rounded-[24px] shadow-sm border border-slate-200 overflow-hidden">
-        <View className="p-5 border-b border-slate-100">
-          <Text className="font-sans-semibold text-slate-900 text-lg">Live Roster</Text>
+          <Text className="font-sans-medium" style={{ fontSize: 11, color: C.faint }}>
+            {total} all time
+          </Text>
         </View>
 
-        {agents.map((agent, index) => {
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 14 }}>
+          <Text
+            className="font-sans-semibold"
+            style={{ fontSize: 56, lineHeight: 56, letterSpacing: -2.5, color: C.text }}
+          >
+            {active}
+          </Text>
+          <Text
+            className="font-sans-medium"
+            style={{ fontSize: 12.5, lineHeight: 17, color: C.muted, paddingBottom: 8, marginLeft: 12, flex: 1 }}
+          >
+            active {active === 1 ? 'ticket' : 'tickets'}
+            {'\n'}
+            {escalated > 0 ? `${escalated} escalated` : 'none escalated'}
+          </Text>
+        </View>
+
+        {topCategory ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginTop: 18,
+              paddingTop: 16,
+              borderTopWidth: 1,
+              borderTopColor: C.hair,
+            }}
+          >
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: C.redTint,
+                marginRight: 9,
+              }}
+            >
+              <Text
+                className="font-sans-semibold"
+                style={{ fontSize: 9.5, letterSpacing: 0.7, textTransform: 'uppercase', color: C.red }}
+              >
+                {topCategory.label}
+              </Text>
+            </View>
+            <Text className="font-sans-medium" style={{ flex: 1, fontSize: 12, color: C.muted }}>
+              Biggest fault · {topShare}% of everything raised
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* STAT ROW */}
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+        <StatTile
+          value={summary.resolved_today ?? 0}
+          label="Closed today"
+          bg={C.greenTint}
+          valueColor={C.greenInk}
+          labelColor={C.green}
+        />
+        <StatTile value={summary.tickets_last_24h ?? 0} label="In 24 hours" />
+        <StatTile
+          value={`${summary.active_agents ?? 0}`}
+          suffix={`/${summary.total_agents ?? 0}`}
+          label="On shift"
+        />
+      </View>
+
+      {/* FAULT MIX */}
+      <View style={{ backgroundColor: C.ink, borderRadius: 24, padding: 18, marginTop: 18 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            marginBottom: 18,
+          }}
+        >
+          <Text className="font-sans-semibold" style={{ fontSize: 15, letterSpacing: -0.2, color: C.ground }}>
+            Fault mix
+          </Text>
+          <Text className="font-sans-medium" style={{ fontSize: 11, color: '#8B86C4' }}>
+            {total} all time
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 9, height: 120 }}>
+          {bars.map((bar, i) => (
+            <View key={bar.label} style={{ flex: 1, alignItems: 'center' }}>
+              <Text
+                className="font-sans-semibold"
+                style={{ fontSize: 12, color: i === 0 ? C.violetLift : '#8B86C4', marginBottom: 8 }}
+              >
+                {bar.count}
+              </Text>
+              <View
+                style={{
+                  width: '100%',
+                  height: `${Math.max(bar.pct * 100, 4)}%`,
+                  borderTopLeftRadius: 10,
+                  borderTopRightRadius: 10,
+                  borderBottomLeftRadius: 4,
+                  borderBottomRightRadius: 4,
+                  backgroundColor: bar.rest
+                    ? C.inkSoft
+                    : [C.violetLift, C.violetMid, C.violet, C.violetDeep][i] || C.inkSoft,
+                }}
+              />
+            </View>
+          ))}
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 9, marginTop: 10 }}>
+          {bars.map((bar) => (
+            <Text
+              key={`l-${bar.label}`}
+              numberOfLines={2}
+              className="font-sans-semibold"
+              style={{ flex: 1, textAlign: 'center', fontSize: 9.5, lineHeight: 12, color: '#8B86C4' }}
+            >
+              {bar.label}
+            </Text>
+          ))}
+        </View>
+
+        {topCategory ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 16,
+              paddingTop: 14,
+              borderTopWidth: 1,
+              borderTopColor: C.inkSoft,
+            }}
+          >
+            <Text className="font-sans-medium" style={{ flex: 1, fontSize: 11.5, color: '#B6B1E0' }}>
+              {topCategory.label} is {topShare}% of everything raised
+            </Text>
+            <Feather name="chevron-right" size={14} color={C.violetLift} />
+          </View>
+        ) : null}
+      </View>
+
+      {/* ROSTER */}
+      <View
+        style={{
+          backgroundColor: C.card,
+          borderRadius: 24,
+          paddingHorizontal: 18,
+          paddingTop: 18,
+          paddingBottom: 6,
+          marginTop: 18,
+          shadowColor: '#1A1440',
+          shadowOpacity: 0.06,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 2,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Text className="font-sans-semibold" style={{ fontSize: 15, letterSpacing: -0.2, color: C.text }}>
+            Roster
+          </Text>
+          <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.violet }}>
+            Manage
+          </Text>
+        </View>
+        <Text className="font-sans-medium" style={{ fontSize: 11, color: C.faint, marginTop: 3 }}>
+          Tickets handled, all time
+        </Text>
+
+        {roster.map((agent, index) => {
           const activeAssigned = Number(agent.active_assigned) || 0;
-          const initials = agent.name ? agent.name.substring(0, 2).toUpperCase() : 'AG';
-
-          const capacityColor =
-            activeAssigned > 5 ? '#E11D48' : activeAssigned === 0 ? '#059669' : '#EA580C';
-
-          const isLast = index === agents.length - 1;
+          const handled = Number(agent.total_assigned) || 0;
+          const onShift = activeAssigned > 0;
+          const isLast = index === roster.length - 1;
+          const role = (agent.role || '').replace(/_/g, ' ').toLowerCase();
 
           return (
             <View
               key={agent.employee_id || index}
-              className={`flex-row items-center justify-between p-4 ${
-                isLast ? '' : 'border-b border-slate-50'
-              }`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 13,
+                paddingHorizontal: onShift ? 14 : 0,
+                marginHorizontal: onShift ? -14 : 0,
+                borderRadius: onShift ? 14 : 0,
+                backgroundColor: onShift ? C.greenWash : 'transparent',
+                borderBottomWidth: isLast ? 0 : 1,
+                borderBottomColor: C.hair,
+              }}
             >
-              <View className="flex-row items-center flex-1 pr-3">
-                <View className="w-10 h-10 bg-slate-100 rounded-full items-center justify-center mr-3">
-                  <Text className="font-sans-semibold text-slate-600 text-xs">{initials}</Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="font-sans-semibold text-slate-900 text-sm" numberOfLines={1}>
-                    {agent.name.trim()}
+              <Text
+                className="font-sans-semibold"
+                style={{ width: 15, fontSize: 11, color: C.faint }}
+              >
+                {index + 1}
+              </Text>
+              <View style={{ flex: 1, minWidth: 0, marginLeft: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text
+                    numberOfLines={1}
+                    className="font-sans-semibold"
+                    style={{ fontSize: 13, color: C.text, flexShrink: 1 }}
+                  >
+                    {(agent.name || '').trim()}
                   </Text>
-                  <Text className="font-sans-medium text-slate-500 text-xs mt-0.5 capitalize">
-                    {agent.role.replace('_', ' ').toLowerCase()}
-                  </Text>
+                  {onShift ? (
+                    <View
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        backgroundColor: C.green,
+                        marginLeft: 7,
+                      }}
+                    />
+                  ) : null}
                 </View>
-              </View>
-
-              <View className="flex-row items-center bg-white border border-slate-200 shadow-sm px-3 py-1 rounded-full">
-                <View
-                  className="w-2 h-2 rounded-full mr-2"
-                  style={{ backgroundColor: capacityColor }}
-                />
-                <Text className="font-sans-semibold text-slate-700 text-xs">
-                  {activeAssigned} / {agent.total_assigned}
+                <Text
+                  numberOfLines={1}
+                  className="font-sans-medium"
+                  style={{
+                    fontSize: 10.5,
+                    marginTop: 1,
+                    color: onShift ? C.green : C.muted,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {onShift
+                    ? `On shift · holding ${activeAssigned} ${activeAssigned === 1 ? 'ticket' : 'tickets'}`
+                    : `${role || 'Support agent'} · off shift`}
                 </Text>
               </View>
+              <Text
+                className="font-sans-semibold"
+                style={{ fontSize: 15, letterSpacing: -0.3, color: C.text }}
+              >
+                {handled}
+              </Text>
             </View>
           );
         })}
       </View>
     </ScrollView>
+    // <InitializingScreen/>
   );
 }
 
-/* ---------------------------------------------------------------- */
-/* Insight Chip — tightened padding, smaller icon circle, tighter    */
-/* vertical rhythm between icon → number → label.                    */
-/* ---------------------------------------------------------------- */
-
-function InsightChip({ icon, iconColor, iconBg, value, label }) {
+function StatTile({ value, suffix, label, bg = C.card, valueColor = C.text, labelColor = C.muted }) {
+  const lifted = bg === C.card;
   return (
     <View
-      className="bg-white px-4 py-3 rounded-2xl mr-3 shadow-sm border border-slate-200"
-      style={{ minWidth: 130 }}
+      style={{
+        flex: 1,
+        backgroundColor: bg,
+        borderRadius: 22,
+        padding: 16,
+        shadowColor: '#1A1440',
+        shadowOpacity: lifted ? 0.06 : 0,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: lifted ? 2 : 0,
+      }}
     >
-      <View className={`w-9 h-9 rounded-full items-center justify-center mb-2 ${iconBg}`}>
-        <Feather name={icon} size={15} color={iconColor} />
-      </View>
-      <Text className="font-sans-semibold text-slate-800 text-2xl mt-1">{value ?? '0'}</Text>
-      <Text className="font-sans-semibold text-slate-400 text-[10px] mt-0" numberOfLines={1}>
+      <Text
+        className="font-sans-semibold"
+        style={{ fontSize: 27, letterSpacing: -1.1, color: valueColor }}
+      >
+        {value}
+        {suffix ? (
+          <Text className="font-sans-semibold" style={{ fontSize: 16, color: C.faint }}>
+            {suffix}
+          </Text>
+        ) : null}
+      </Text>
+      <Text className="font-sans-semibold" style={{ fontSize: 10.5, color: labelColor, marginTop: 4 }}>
         {label}
       </Text>
     </View>

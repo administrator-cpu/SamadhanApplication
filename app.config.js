@@ -6,18 +6,18 @@ export default ({ config }) => {
     development: {
       name: "Samadhan (Dev)",
       apiUrl: "https://samadhan-api.fab5connect.com/api",
-      androidPackage: "com.harshjha047.samadhan.dev",
+      androidPackage: "com.harshjha047.samadhan",
     },
     staging: {
       name: "Samadhan (Staging)",
       apiUrl: "https://samadhan-api.fab5connect.com/api",
-      androidPackage: "com.harshjha047.samadhan.staging",
+      androidPackage: "com.harshjha047.samadhan",
     },
     production: {
       name: "Samadhan",
       apiUrl: "https://samadhan-api.fab5connect.com/api",
       androidPackage: "com.harshjha047.samadhan",
-    }, 
+    },
   }[env];
 
   return {
@@ -25,6 +25,7 @@ export default ({ config }) => {
     name: envConfig.name,
     slug: "samadhan",
     icon: "./assets/icon.png",
+    newArchEnabled: true,
     android: {
       package: envConfig.androidPackage,
       softwareKeyboardLayoutMode: 'resize',
@@ -32,9 +33,14 @@ export default ({ config }) => {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
       },
+      permissions: ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
     },
     ios: {
       bundleIdentifier: envConfig.androidPackage,
+      infoPlist: {
+        NSCameraUsageDescription: 'Samadhan needs camera access so you can attach a photo of the issue to your ticket.',
+        NSMicrophoneUsageDescription: 'Samadhan needs microphone access to make and receive calls.',
+      },
     },
     splash: {
       image: "./assets/splash-icon.png",
@@ -47,34 +53,32 @@ export default ({ config }) => {
       "expo-status-bar",
       "expo-web-browser",
       "expo-font",
+      "expo-image",
+      "expo-sharing",
       [
         "expo-notifications",
         { color: "#2563eb" },
       ],
-      // Ticket attachments (RaiseTicketForm / TicketReplyForm) — photo &
-      // video picking. The plugin sets NSPhotoLibraryUsageDescription on
-      // iOS; without it you get Apple's generic default string instead of
-      // in-brand copy.
       [
         "expo-image-picker",
         {
           photosPermission: "Allow Samadhan to access your photos to attach them to a ticket.",
         },
       ],
-      // Document attachments (PDFs, CSVs, etc.) via the paperclip menu.
-      // No permission strings needed — included here mainly so it's
-      // explicit in the manifest and easy to find alongside the others.
       "expo-document-picker",
-      // Lightbox "Save" button — saves images to the device gallery.
-      // Needs both iOS strings (NSPhotoLibraryUsageDescription /
-      // NSPhotoLibraryAddUsageDescription) and the Android media
-      // permissions; the plugin wires up both.
       [
         "expo-media-library",
         {
           photosPermission: "Allow Samadhan to access your photos.",
           savePhotosPermission: "Allow Samadhan to save images from tickets to your gallery.",
           isAccessMediaLocationEnabled: false,
+        },
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          cameraPermission: "Samadhan needs camera access for video calls.",
+          microphonePermission: "Samadhan needs microphone access for calls.",
         },
       ],
     ],

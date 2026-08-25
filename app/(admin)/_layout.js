@@ -66,18 +66,13 @@ function FloatingPillTabBar({ state, descriptors, navigation }) {
 }
 
 export default function AdminTabsLayout() {
-  // Expo Router's own segments array, e.g. ['(admin)', 'tickets', '[id]']
-  // while viewing a ticket's chat thread. This replaces the earlier
-  // getFocusedRouteNameFromRoute approach — SDK 56+ decoupled Expo
-  // Router from a direct @react-navigation/native dependency, so pulling
-  // that package in directly is no longer safe to rely on.
   const segments = useSegments();
   const hideTabBar = segments.includes('[id]');
 
   return (
     <Tabs
       screenOptions={{ headerShown: false }}
-      tabBar={(props) => (hideTabBar ? null : <FloatingPillTabBar {...props} />)}
+      tabBar={(props) => ((hideTabBar) ? null : <FloatingPillTabBar {...props} />)}
     >
       <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
       <Tabs.Screen name="tickets" options={{ title: 'Tickets' }} />

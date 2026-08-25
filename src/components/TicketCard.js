@@ -1,146 +1,257 @@
 // src/components/TicketCard.js
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { memo } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { statusLabel } from '../utils/ticketStatus';
 
-export const STATUS_CONFIG = {
-  OPEN: { bg: 'bg-blue-50', text: 'text-blue-700' },
-  IN_PROGRESS: { bg: 'bg-amber-50', text: 'text-amber-700' },
-  ESCALATED: { bg: 'bg-rose-50', text: 'text-rose-700' },
-  RESOLVED: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  CLOSED: { bg: 'bg-slate-100', text: 'text-slate-500' },
-  REOPENED: { bg: 'bg-rose-50', text: 'text-rose-700' },
+/* ---------------------------------------------------------------- */
+/* Design tokens — vivid palette.                                    */
+/* ---------------------------------------------------------------- */
+
+export const C = {
+  bg: '#F3F2FD',
+  card: '#FFFFFF',
+  ink: '#151233',
+  inkMuted: '#6D6A96',
+  inkFaint: '#9D9AC0',
+  mono: '#9D9AC0',
+  monoFaint: '#C3C0E2',
+  violet: '#6C5CE7',
+  violetDeep: '#5A48D6',
+  violetLight: '#8271EF',
+  violetTint: '#EBE8FF',
+  violetTintWarm: '#E6E1FF',
+  violetInk: '#4A34C7',
+  mint: '#CCF7E4',
+  mintInk: '#0D6B4B',
+  mintInk2: '#0F7A56',
+  mintSpine: '#12B886',
+  marigold: '#FFD166',
+  marigoldInk: '#6B4800',
+  marigoldInk2: '#7A5200',
+  coral: '#C2410C',
+  coralSpine: '#FF8A3D',
+  track: '#EBE8FF',
 };
 
-const SOFT_SHADOW = {
-  shadowColor: '#0F172A',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.06,
-  shadowRadius: 6,
-  elevation: 2,
+const STATUS_META = {
+  OPEN: { tint: C.mint, ink: C.mintInk2, spine: C.mintSpine },
+  IN_PROGRESS: { tint: C.violetTintWarm, ink: C.violetInk, spine: C.violet },
+  ESCALATED: { tint: C.coral, ink: '#FFFFFF', spine: C.coralSpine },
+  RESOLVED: { tint: C.mint, ink: C.mintInk2, spine: C.mintSpine },
+  CLOSED: { tint: C.violetTint, ink: '#4A4776', spine: C.violet },
 };
 
-// Default matches this card's most common host screen (the ticket list,
-// bg-slate-50). Any screen with a different background — e.g. the
-// Dashboard's bg-white — must override this via the `cutoutColor` prop,
-// or the punch-out notches will show as visible gray dots instead of
-// blending invisibly into the host background.
-const DEFAULT_CUTOUT_COLOR = '#F8FAFC'; // slate-50
+export const AVATAR_BG = [C.violetTintWarm, C.mint, C.marigold];
+export const AVATAR_INK = [C.violetInk, C.mintInk2, C.marigoldInk];
 
-export const formatMetaDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-function Dot() {
-  return <Text className="text-slate-300 text-xs mx-1.5">•</Text>;
+const CUSTOMER_ROLES = ['USER', 'CUSTOMER'];
+function isCustomerRole(role) {
+  return CUSTOMER_ROLES.includes(String(role || '').toUpperCase());
 }
 
-/**
- * "Boarding pass" style ticket card — main body, perforated divider with
- * punch-out notches, bottom stub.
- *
- * @param {object} ticket - the ticket record
- * @param {function} onPress
- * @param {string} [cutoutColor] - hex/rgba color for the two divider
- *   "cutout" circles. MUST match the background color of whatever screen
- *   renders this card, or the illusion of a physical hole breaks. Defaults
- *   to slate-50 (#F8FAFC) for the ticket list. Pass '#FFFFFF' (or your
- *   design token's white) when placing this on a pure-white background
- *   like the Dashboard.
- * @param {object} [containerStyle] - extra style merged onto the outer
- *   Pressable, for margin/width overrides per host screen (e.g. the
- *   Dashboard may want a tighter mb-3 instead of this card's default mb-4,
- *   or a fixed width if used inside a horizontal carousel).
- */
-export const TicketCard = memo(function TicketCard({
-  ticket,
-  onPress,
-  cutoutColor = DEFAULT_CUTOUT_COLOR,
-  containerStyle,
-}) {
-  const config = STATUS_CONFIG[ticket?.status] || STATUS_CONFIG.CLOSED;
+export function initialsOf(name = '') {
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
 
+export function paletteIndex(seed = '') {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash + seed.charCodeAt(i)) % AVATAR_BG.length;
+  return hash;
+}
+
+function priorityOf(ticket) {
+  const raw = String(
+    ticket?.priority ?? ticket?.priority_level ?? ticket?.severity ?? ''
+  ).toUpperCase();
+  if (/P?1|CRITICAL|URGENT|HIGH/.test(raw)) return 'P1';
+  if (/P?2|MEDIUM|NORMAL/.test(raw)) return 'P2';
+  if (/P?3|LOW/.test(raw)) return 'P3';
+  return ticket?.status === 'ESCALATED' ? 'P1' : 'P2';
+}
+
+function sourceOf(ticket) {
+  const raw = String(ticket?.source || ticket?.channel || '').toUpperCase();
+  if (raw.includes('ALL') || raw.includes('PHONE')) return 'Call';
+  if (raw.includes('AUTO') || raw.includes('SYSTEM')) return 'Auto';
+  return ticket?.status === 'ESCALATED' ? 'Auto' : 'Call';
+}
+
+export function slaOf(ticket) {
+  const due = ticket?.sla_due_at || ticket?.due_at || ticket?.sla_deadline;
+  if (!due) {
+    if (ticket?.status === 'ESCALATED') return { risk: 2, text: 'Escalated · SLA at risk' };
+    if (ticket?.status === 'RESOLVED') return { risk: 0, text: 'Closed within SLA' };
+    return { risk: 0, text: 'Within SLA window' };
+  }
+  const diffMin = Math.round((new Date(due).getTime() - Date.now()) / 60000);
+  if (diffMin < 0) {
+    const over = Math.abs(diffMin);
+    return { risk: 2, text: over >= 60 ? `Overdue ${Math.floor(over / 60)}h` : `Overdue ${over}m` };
+  }
+  if (diffMin <= 60) return { risk: 1, text: `Due in ${diffMin}m` };
+  if (diffMin <= 60 * 24) return { risk: 0, text: `Due in ${Math.floor(diffMin / 60)}h` };
+  return { risk: 0, text: 'Within SLA window' };
+}
+
+// REOPENED removed from the "actively working" bucket.
+function stageOf(ticket) {
+  const assigned = Boolean(ticket?.assigned_employee_name?.trim());
+  switch (ticket?.status) {
+    case 'RESOLVED':
+    case 'CLOSED':
+      return 4;
+    case 'IN_PROGRESS':
+    case 'ESCALATED':
+      return 3;
+    default:
+      return assigned ? 2 : 1;
+  }
+}
+
+function blockStyle(ticket, sla) {
+  if (sla.risk === 2) return { bg: C.coral, ink: '#FFFFFF' };
+  if (sla.risk === 1) return { bg: C.marigold, ink: C.marigoldInk };
+  if (ticket?.status === 'RESOLVED' || ticket?.status === 'CLOSED') {
+    return { bg: C.mint, ink: C.mintInk2 };
+  }
+  return { bg: C.violetTint, ink: '#4A4776' };
+}
+
+function whenLabel(dateString) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${date} · ${time}`;
+}
+
+export const TicketCard = memo(function TicketCard({ ticket, index = 0, onPress, role }) {
+  const isCustomerView = isCustomerRole(role);
+
+  const status = ticket?.status || 'CLOSED';
+  const meta = STATUS_META[status] || STATUS_META.CLOSED;
+  const sla = slaOf(ticket);
+  const block = blockStyle(ticket, sla);
+  const subject =
+    ticket?.subject?.trim() ||
+    ticket?.issue_category?.trim() ||
+    ticket?.circuit_description?.trim() ||
+    'No subject provided';
+  const companyName = ticket?.customer_name?.trim() || 'Unknown Customer';
   const ticketNo = ticket?.ticket_no || 'TKT-PENDING';
-  const subject = ticket?.subject?.trim() || 'No Subject Provided';
-  const circuitDesc = ticket?.circuit_description?.trim();
-  const customerName = ticket?.customer_name?.trim();
-  const assignee = ticket?.assigned_employee_name?.trim() || 'Unassigned';
-  const dateStr = formatMetaDate(ticket?.updated_at);
-
-  const infoParts = [circuitDesc, customerName, dateStr].filter(Boolean);
+  const assignee = ticket?.assigned_employee_name?.trim();
+  const owner = assignee || 'No owner';
+  const avIdx = index % AVATAR_BG.length;
+  const slaInk = sla.risk === 2 ? C.coral : sla.risk === 1 ? '#8A5A00' : '#B8B8B8';
+  const stage = stageOf(ticket);
+  const stageFill = status === 'ESCALATED' ? C.coral : stage === 4 ? C.mintSpine : C.violet;
+  const source = sourceOf(ticket);
+  const leftBlockLabel = isCustomerView ? source : priorityOf(ticket);
+  const leftBlockStyle = block;
+  const subtitleText = isCustomerView ? ticket?.circuit_description?.trim() ||
+    'No subject provided' : companyName;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
-      hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-      style={({ pressed }) => [
-        { opacity: pressed ? 0.85 : 1 },
-        SOFT_SHADOW,
-        containerStyle,
-      ]}
-      className="bg-white rounded-2xl mb-4 overflow-hidden"
+      activeOpacity={0.88}
+      className="shadow-sm"
+      style={{
+        backgroundColor: C.card,
+        borderRadius: 26,
+        padding: 16,
+        marginHorizontal: 16,
+        marginBottom: 12,
+        gap: 11,
+      }}
     >
-      {/* Main body */}
-      <View className="p-4">
-        <View className="flex-row items-start justify-between mb-1.5">
-          <Text
-            className="font-sans-semibold text-lg text-slate-800 flex-1 pr-3"
-            numberOfLines={2}
-          >
+      <View className="flex-row items-center" style={{ gap: 10 }}>
+        <View
+          className="items-center justify-center"
+          style={{
+            width:  42,
+            height: 42,
+            borderRadius: 16,
+            backgroundColor: leftBlockStyle.bg,
+          }}
+        >
+          <Text className="font-sans-semibold" style={{ fontSize: 13, color: leftBlockStyle.ink }}>
+             <MaterialCommunityIcons name="ticket-confirmation-outline" size={20} color='' className=""/>
+            
+          </Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text className="font-sans-semibold" style={{ fontSize: 19, color: C.ink }} numberOfLines={1}>
             {subject}
           </Text>
-          <Text className="font-mono text-xs text-slate-400 pt-0.5" numberOfLines={1}>
+          <Text className="font-sans " style={{ fontSize: 12, color: C.inkMuted }} numberOfLines={1}>
+            {subtitleText}
+          </Text>
+        </View>
+        <View
+          className="items-center justify-center"
+          style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: C.violetTint }}
+        >
+          <Feather name="arrow-right" size={15} color={C.ink} />
+        </View>
+      </View>
+
+      <View className="flex-row items-center" style={{ gap: 9 }}>
+        <View style={{ backgroundColor: meta.tint, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+          <Text
+            className="font-sans-semibold"
+            style={{ fontSize: 9.5, letterSpacing: 0.7, textTransform: 'uppercase', color: meta.ink }}
+          >
+            {statusLabel(status)}
+          </Text>
+        </View>
+        <Text
+          className="font-sans-medium"
+          style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: slaInk }}
+          numberOfLines={1}
+        >
+          {sla.text}
+        </Text>
+
+
+
+        <View
+          className="items-center justify-center"
+          style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: AVATAR_BG[avIdx] }}
+        >
+          <Text className="font-sans-semibold" style={{ fontSize: 9, color: AVATAR_INK[avIdx] }}>
+            {initialsOf(owner === 'No owner' ? '?' : owner)}
+          </Text>
+        </View>
+        <Text className="font-sans" style={{ fontSize: 11, color: C.inkMuted }} numberOfLines={1}>
+          {owner}
+        </Text>
+
+
+      </View>
+
+      <View style={{ gap: 8, paddingTop: 2 }}>
+        <View style={{ height: 3, borderRadius: 999, backgroundColor: C.track, overflow: 'hidden' }}>
+          <View style={{ height: '100%', borderRadius: 999, width: `${(stage / 4) * 100}%`, backgroundColor: stageFill }} />
+        </View>
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <Text className="font-mono" style={{ fontSize: 10.5, color: C.mono }} numberOfLines={1}>
             {ticketNo}
           </Text>
-        </View>
-
-        {infoParts.length > 0 && (
-          <View className="flex-row flex-wrap items-center">
-            {infoParts.map((part, index) => (
-              <View key={`${part}-${index}`} className="flex-row items-center">
-                {index > 0 && <Dot />}
-                <Text className="font-sans-medium text-slate-500 text-xs" numberOfLines={1}>
-                  {part}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* Perforated divider with punch-out notches */}
-      <View className="relative">
-        <View className="border-t-2 border-dashed border-slate-200" />
-        <View
-          className="absolute w-4 h-4 rounded-full"
-          style={{ left: -8, top: -8, backgroundColor: cutoutColor }}
-        />
-        <View
-          className="absolute w-4 h-4 rounded-full"
-          style={{ right: -8, top: -8, backgroundColor: cutoutColor }}
-        />
-      </View>
-
-      {/* Stub */}
-      <View className="flex-row items-center justify-between bg-slate-50/50 px-4 py-3">
-        <View className={`px-2.5 py-1 rounded-full ${config.bg}`}>
-          <Text className={`font-sans-semibold text-[10px] uppercase tracking-wide ${config.text}`}>
-            {statusLabel(ticket?.status)}
+          <Text className="font-mono" style={{ flex: 1, minWidth: 0, fontSize: 10.5, color: C.monoFaint }} numberOfLines={1}>
+            {isCustomerView? '':ticket?.circuit_description}
+          </Text>
+          <Feather name="clock" size={12} color={C.mono} />
+          <Text className="font-sans-medium" style={{ fontSize: 10.5, color: C.inkMuted }} numberOfLines={1}>
+            {whenLabel(ticket?.updated_at || ticket?.created_at)}
           </Text>
         </View>
-        <Text className="font-sans text-slate-400 text-xs italic" numberOfLines={1}>
-          handled by {assignee}
-        </Text>
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 });
 

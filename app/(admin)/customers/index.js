@@ -61,7 +61,8 @@ export default function CustomerManagement() {
                 <Text style={styles.email}>{item.email}</Text>
               </View>
               <View style={{ gap: 5 }}>
-                {item.outstanding !== null && item.outstanding !== undefined && user.email !== "abhishek@fab5network.com" && (
+                {item.outstanding !== null && item.outstanding !== undefined && 
+user?.email !== "abhishek@fab5network.com" && (
                   <Text style={{ fontSize: 12, fontWeight: '700', color: item.outstanding > 0 ? '#dc2626' : '#16a34a', marginRight: 8 }}>
                     ₹{item.outstanding}
                   </Text>

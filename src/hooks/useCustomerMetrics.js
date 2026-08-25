@@ -26,5 +26,7 @@ export function useCustomerMetrics(customerId, { circuitId = 'ALL', totalCircuit
       return data.data;
     },
     enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
+   gcTime: 10 * 60 * 1000,
   });
 }
