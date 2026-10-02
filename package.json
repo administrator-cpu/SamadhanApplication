@@ -19,7 +19,7 @@
     "babel-preset-expo": "^57.0.2",
     "expo": "~57.0.20",
     "expo-application": "~57.0.2",
-    "expo-av": "^16.0.8",
+    "expo-audio": "~57.0.4",
     "expo-blur": "~57.0.2",
     "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.3",
@@ -46,6 +46,7 @@
     "expo-symbols": "~57.0.2",
     "expo-system-ui": "~57.0.3",
     "expo-updates": "~57.0.21",
+    "expo-video": "~57.0.3",
     "expo-web-browser": "~57.0.2",
     "lucide-react-native": "^1.23.0",
     "nativewind": "^4.2.6",
@@ -73,6 +74,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "eas-build-pre-install": "npm install --package-lock-only",
     "start": "expo start --port 3000",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",

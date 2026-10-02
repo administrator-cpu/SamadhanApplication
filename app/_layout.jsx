@@ -14,6 +14,8 @@ import OfflineBanner from '../src/components/OfflineBanner';
 import { useBadgeCount } from '../src/hooks/useBadgeCount';
 import { useOfflineFlush } from '../src/hooks/useOfflineFlush';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
+import { CallProvider } from '../src/context/CallProvider';
+import { connectSocket, disconnectSocket } from '../src/sockets/socketManager';
 
 import { Fraunces_500Medium, useFonts } from '@expo-google-fonts/fraunces';
 import { Karla_400Regular, Karla_600SemiBold } from '@expo-google-fonts/karla';
@@ -35,9 +37,8 @@ const ROLE_GROUPS = ['(customer)', '(agent)', '(admin)', '(sales)'];
 
 function RootLayoutNav() {
   const { isInitializing, isAuthenticated, user, hydrate, clearAuth } = useAuthStore();
-  
-  // FIX: Destructure exactly what we need so NativeWind's logger doesn't crash on the router object
-  const { replace } = useRouter(); 
+
+  const { replace } = useRouter();
   const segments = useSegments();
 
   const [fontsLoaded, fontError] = useFonts({
@@ -49,7 +50,7 @@ function RootLayoutNav() {
   useEffect(() => {
     setOnSessionExpired(() => {
       clearAuth();
-      replace('/(auth)/login'); // Updated
+      replace('/(auth)/login');
     });
   }, [clearAuth, replace]);
 
@@ -66,6 +67,15 @@ function RootLayoutNav() {
   }, []);
 
   useEffect(() => {
+    if (isAuthenticated) {
+      connectSocket();
+    } else {
+      disconnectSocket();
+    }
+    return () => disconnectSocket();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     if (isInitializing) return;
 
     const currentGroup = segments[0];
@@ -75,7 +85,7 @@ function RootLayoutNav() {
     const homeRoute = ROLE_HOME_ROUTES[user?.role];
 
     if (!isAuthenticated) {
-      if (!inAuthGroup) replace('/(auth)/login'); // Updated
+      if (!inAuthGroup) replace('/(auth)/login');
       return;
     }
 
@@ -84,22 +94,22 @@ function RootLayoutNav() {
     }
 
     if (user?.must_change_password && !inForcedChangeScreen) {
-      replace('/(auth)/force-password-change'); // Updated
+      replace('/(auth)/force-password-change');
       return;
     }
 
     if (!user?.must_change_password && inForcedChangeScreen) {
-      replace(homeRoute); // Updated
+      replace(homeRoute);
       return;
     }
 
     if (inAuthGroup && !inForcedChangeScreen) {
-      replace(homeRoute); // Updated
+      replace(homeRoute);
       return;
     }
 
     if (inRoleGroup && `(${currentGroup.slice(1, -1)})` !== homeRoute.slice(1)) {
-      replace(homeRoute); // Updated
+      replace(homeRoute);
     }
   }, [isAuthenticated, isInitializing, segments, user?.role, user?.must_change_password, replace]);
 
@@ -111,22 +121,24 @@ function RootLayoutNav() {
     <>
       <StatusBar style="auto" />
       <OfflineBanner />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'fade_from_bottom',
-          contentStyle: { backgroundColor: '#0f172a' }
-        }}
-      >
-        <Stack.Screen
-          name="(auth)"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen name="(customer)" />
-        <Stack.Screen name="(agent)" />
-        <Stack.Screen name="(admin)" />
-        <Stack.Screen name="(sales)" />
-      </Stack>
+      <CallProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: 'fade_from_bottom',
+            contentStyle: { backgroundColor: '#0f172a' }
+          }}
+        >
+          <Stack.Screen
+            name="(auth)"
+            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen name="(customer)" />
+          <Stack.Screen name="(agent)" />
+          <Stack.Screen name="(admin)" />
+          <Stack.Screen name="(sales)" />
+        </Stack>
+      </CallProvider>
     </>
   );
 }

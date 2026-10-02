@@ -3,6 +3,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { memo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { statusLabel } from '../utils/ticketStatus';
+import { useAuthStore } from '../store/authStore';
 
 /* ---------------------------------------------------------------- */
 /* Design tokens — vivid palette.                                    */
@@ -131,6 +132,9 @@ function whenLabel(dateString) {
 
 export const TicketCard = memo(function TicketCard({ ticket, index = 0, onPress, role }) {
   const isCustomerView = isCustomerRole(role);
+  const isAgentView = (role=="SUPPORT_AGENT");
+  const user = useAuthStore((state) => state.user);
+
 
   const status = ticket?.status || 'CLOSED';
   const meta = STATUS_META[status] || STATUS_META.CLOSED;
@@ -144,7 +148,7 @@ export const TicketCard = memo(function TicketCard({ ticket, index = 0, onPress,
   const companyName = ticket?.customer_name?.trim() || 'Unknown Customer';
   const ticketNo = ticket?.ticket_no || 'TKT-PENDING';
   const assignee = ticket?.assigned_employee_name?.trim();
-  const owner = assignee || 'No owner';
+  const owner = assignee ||user?.name|| 'No owner';
   const avIdx = index % AVATAR_BG.length;
   const slaInk = sla.risk === 2 ? C.coral : sla.risk === 1 ? '#8A5A00' : '#B8B8B8';
   const stage = stageOf(ticket);

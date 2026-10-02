@@ -19,6 +19,7 @@ export default function ConnectionPicker({ visible, connections, selectedId, onS
             keyExtractor={(item, index) => item?.fabCircuitId || String(index)}
             style={{ maxHeight: 400 }}
             renderItem={({ item }) => {
+              console.log('Rendering item:', item); // Debugging line
               const isSelected = item.fabCircuitId === selectedId;
               return (
                 <Pressable
@@ -33,7 +34,7 @@ export default function ConnectionPicker({ visible, connections, selectedId, onS
                       {item.fabCircuitId}
                     </Text>
                     {item.serviceType && (
-                      <Text style={styles.subText}>{item.serviceType}</Text>
+                      <Text style={styles.subText}>{item.serviceType} . {item.bEndBtsId === "N/A" ? item.aEndBtsId : item.bEndBtsId}</Text>
                     )}
                   </View>
                   {isSelected && <Feather name="check" size={18} color="#2563eb" />}

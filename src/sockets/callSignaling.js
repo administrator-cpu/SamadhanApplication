@@ -13,36 +13,36 @@ export const CALL_EVENTS = {
   BUSY: 'call:busy',
 };
 
-export function emitInvite({ toUserId, ticketId, callId, callerName }) {
-  getSocket()?.emit(CALL_EVENTS.INVITE, { toUserId, ticketId, callId, callerName });
+export function emitInvite({ toEmail, ticketId, callId, callerName }) {
+  getSocket()?.emit(CALL_EVENTS.INVITE, { toEmail, ticketId, callId, callerName });
 }
 
-export function emitOffer({ toUserId, callId, sdp }) {
-  getSocket()?.emit(CALL_EVENTS.OFFER, { toUserId, callId, sdp });
+export function emitOffer({ toEmail, callId, sdp }) {
+  getSocket()?.emit(CALL_EVENTS.OFFER, { toEmail, callId, sdp });
 }
 
-export function emitAnswer({ toUserId, callId, sdp }) {
-  getSocket()?.emit(CALL_EVENTS.ANSWER, { toUserId, callId, sdp });
+export function emitAnswer({ toEmail, callId, sdp }) {
+  getSocket()?.emit(CALL_EVENTS.ANSWER, { toEmail, callId, sdp });
 }
 
-export function emitIceCandidate({ toUserId, callId, candidate }) {
-  getSocket()?.emit(CALL_EVENTS.ICE_CANDIDATE, { toUserId, callId, candidate });
+export function emitIceCandidate({ toEmail, callId, candidate }) {
+  getSocket()?.emit(CALL_EVENTS.ICE_CANDIDATE, { toEmail, callId, candidate });
 }
 
-export function emitAccept({ toUserId, callId }) {
-  getSocket()?.emit(CALL_EVENTS.ACCEPT, { toUserId, callId });
+export function emitAccept({ toEmail, callId }) {
+  getSocket()?.emit(CALL_EVENTS.ACCEPT, { toEmail, callId });
 }
 
-export function emitReject({ toUserId, callId }) {
-  getSocket()?.emit(CALL_EVENTS.REJECT, { toUserId, callId });
+export function emitReject({ toEmail, callId }) {
+  getSocket()?.emit(CALL_EVENTS.REJECT, { toEmail, callId });
 }
 
-export function emitCancel({ toUserId, callId }) {
-  getSocket()?.emit(CALL_EVENTS.CANCEL, { toUserId, callId });
+export function emitCancel({ toEmail, callId }) {
+  getSocket()?.emit(CALL_EVENTS.CANCEL, { toEmail, callId });
 }
 
-export function emitEnd({ toUserId, callId }) {
-  getSocket()?.emit(CALL_EVENTS.END, { toUserId, callId });
+export function emitEnd({ toEmail, callId }) {
+  getSocket()?.emit(CALL_EVENTS.END, { toEmail, callId });
 }
 
 /**

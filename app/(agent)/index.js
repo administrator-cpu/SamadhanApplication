@@ -63,6 +63,8 @@ export default function AgentDashboard() {
   const summary = stats?.summary || {};
   const recentTickets = stats?.recentTickets || [];
 
+  
+
   const activeCount = parseInt(pickStat(summary, ['active', 'open', 'assigned'])) || 0;
   const escalatedCount = parseInt(pickStat(summary, ['escalat'])) || 0;
   const resolvedCount = parseInt(pickStat(summary, ['resolv', 'clos'])) || 0;

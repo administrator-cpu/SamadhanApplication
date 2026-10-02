@@ -1,6 +1,6 @@
 // app.config.js
 export default ({ config }) => {
-  const env = "production";
+  const env = "development";
 
   const envConfig = {
     development: {
@@ -48,6 +48,8 @@ export default ({ config }) => {
       backgroundColor: "#ffffff",
     },
     plugins: [
+      "expo-video",
+      "expo-audio",
       "expo-router",
       "expo-splash-screen",
       "expo-status-bar",
@@ -55,6 +57,7 @@ export default ({ config }) => {
       "expo-font",
       "expo-image",
       "expo-sharing",
+      "expo-secure-store",
       [
         "expo-notifications",
         { color: "#2563eb" },

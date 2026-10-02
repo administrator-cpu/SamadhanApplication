@@ -6,16 +6,19 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useUpdateRCA } from '../hooks/useTickets';
 import { haptics } from '../utils/haptics';
 import { FORM, T } from './ticketTheme';
+import { LightboxContent } from './ImageLightbox';
 
 const MAX_IMAGES = 10;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -25,6 +28,7 @@ export default function TicketRCAForm({ ticket, onDone }) {
   const [existingImages, setExistingImages] = useState(ticket?.rca_images || []);
   const [newImages, setNewImages] = useState([]); // { uri, fileName, mimeType }
   const { mutate, isPending, error } = useUpdateRCA(ticket?.id);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const totalImageCount = existingImages.length + newImages.length;
 
@@ -121,7 +125,9 @@ export default function TicketRCAForm({ ticket, onDone }) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
         {existingImages.map((url) => (
           <View key={url} style={{ position: 'relative' }}>
-            <Image source={{ uri: url }} style={styles.thumb} />
+             <TouchableOpacity activeOpacity={0.85} onPress={() => setLightboxUrl(url)}>
+              <Image source={{ uri: url }} style={styles.thumb} />
+            </TouchableOpacity>
             <Pressable style={styles.removeBadge} onPress={() => removeExisting(url)} hitSlop={8}>
               <Feather name="x" size={11} color="#FFFFFF" />
             </Pressable>
@@ -129,7 +135,9 @@ export default function TicketRCAForm({ ticket, onDone }) {
         ))}
         {newImages.map((img) => (
           <View key={img.uri} style={{ position: 'relative' }}>
-            <Image source={{ uri: img.uri }} style={styles.thumb} />
+            <TouchableOpacity activeOpacity={0.85} onPress={() => setLightboxUrl(img.uri)}>
+              <Image source={{ uri: img.uri }} style={styles.thumb} />
+            </TouchableOpacity>
             <Pressable style={styles.removeBadge} onPress={() => removeNew(img.uri)} hitSlop={8}>
               <Feather name="x" size={11} color="#FFFFFF" />
             </Pressable>
@@ -153,6 +161,9 @@ export default function TicketRCAForm({ ticket, onDone }) {
       </Pressable>
 
       <Text style={styles.footNote}>The customer sees this in the chat as soon as you publish.</Text>
+       <Modal visible={!!lightboxUrl} transparent={false} animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+        <LightboxContent url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      </Modal>
     </ScrollView>
   );
 }

@@ -84,7 +84,7 @@ export default function MyConnections() {
   const renderRow = (item, index) => {
     const isActive = (item.status || 'Active').toLowerCase() === 'active';
     const { fig, unit } = formatBandwidth(item.bandwidth);
-    const site = item.installationCode || item.aEndBtsId || '—';
+    const site = item.bEndBtsId === "N/A" ? item.aEndBtsId : item.bEndBtsId || '—';
 
     return (
       <Pressable
@@ -114,7 +114,6 @@ export default function MyConnections() {
               fontSize: 14.5,
               letterSpacing: -0.3,
               color: C.ink,
-              
             }}
             
             numberOfLines={1}
