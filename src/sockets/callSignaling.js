@@ -45,12 +45,7 @@ export function emitEnd({ toEmail, callId }) {
   getSocket()?.emit(CALL_EVENTS.END, { toEmail, callId });
 }
 
-/**
- * Binds all call-related socket listeners at once and returns a single
- * cleanup function. Any handler left undefined in `handlers` is skipped.
- */
-export function bindCallListeners(handlers) {
-  const socket = getSocket();
+export function bindCallListeners(handlers, socket = getSocket()) {
   if (!socket) return () => {};
 
   const map = {

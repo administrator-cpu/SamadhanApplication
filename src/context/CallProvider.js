@@ -5,6 +5,7 @@ import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { useCall, CALL_STATUS } from '@/hooks/useCall';
 import IncomingCallModal from '@/components/calls/IncomingCallModal';
 import InCallScreen from '@/components/calls/InCallScreen';
+import { onSocketChange } from '@/sockets/socketManager';
 
 const CallContext = createContext(null);
 
@@ -15,10 +16,21 @@ export function CallProvider({ children }) {
   const detachRef = useRef(null);
   const playerRef = useRef(null);
 
+  // useEffect(() => {
+  //   detachRef.current = call.attachSignalingListeners();
+  //   return () => detachRef.current?.();
+  // }, [call.attachSignalingListeners]);
   useEffect(() => {
-    detachRef.current = call.attachSignalingListeners();
-    return () => detachRef.current?.();
-  }, [call.attachSignalingListeners]);
+  let detach = () => {};
+  const off = onSocketChange((s) => {
+    detach();
+    detach = s ? call.attachSignalingListeners(s) : () => {};
+  });
+  return () => {
+    off();
+    detach();
+  };
+}, [call.attachSignalingListeners]);
 
   const showIncoming = call.status === CALL_STATUS.RINGING_INCOMING && call.incomingCall;
   const showInCall = [

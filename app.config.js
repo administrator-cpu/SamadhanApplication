@@ -1,6 +1,6 @@
 // app.config.js
 export default ({ config }) => {
-  const env = "development";
+  const env = "production";
 
   const envConfig = {
     development: {
@@ -87,8 +87,17 @@ export default ({ config }) => {
     ],
     scheme: 'samadhan',
     extra: {
-      apiUrl: envConfig.apiUrl,
-      eas: { projectId: "20dbfe9a-6b5a-45d2-baa3-e74d84f4a258" },
-    },
+  apiUrl: envConfig.apiUrl,
+  turn: {
+    urls: [
+      'turn:YOUR_TURN_HOST:3478?transport=udp',
+      'turn:YOUR_TURN_HOST:3478?transport=tcp',
+      'turns:YOUR_TURN_HOST:5349?transport=tcp',
+    ],
+    username: process.env.TURN_USERNAME,
+    credential: process.env.TURN_CREDENTIAL,
+  },
+  eas: { projectId: "20dbfe9a-6b5a-45d2-baa3-e74d84f4a258" },
+},
   };
 };

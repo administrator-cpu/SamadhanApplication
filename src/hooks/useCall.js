@@ -24,7 +24,6 @@ export { CALL_STATUS };
 
 export function useCall() {
   const user = useAuthStore((s) => s.user);
-
   const [status, setStatus] = useState(CALL_STATUS.IDLE);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -34,7 +33,7 @@ export function useCall() {
   const pcRef = useRef(null);
   const callIdRef = useRef(null);
   const peerEmailRef = useRef(null);
-  const pendingCandidatesRef = useRef([]);
+  const pendingCandidatesRef = useRef({}); // callId -> candidates[]
   const statusRef = useRef(CALL_STATUS.IDLE);
   const timeoutRef = useRef(null);
 
@@ -60,12 +59,20 @@ export function useCall() {
     pcRef.current = null;
     callIdRef.current = null;
     peerEmailRef.current = null;
-    pendingCandidatesRef.current = [];
+    pendingCandidatesRef.current = {};
     setRemoteStream(null);
     setIsMuted(false);
     setIncomingCall(null);
     setStatusSafe(CALL_STATUS.IDLE);
   }, [setStatusSafe, clearRingTimeout]);
+
+  const flushCandidates = useCallback(async (pc, callId) => {
+    const queued = pendingCandidatesRef.current[callId] || [];
+    delete pendingCandidatesRef.current[callId];
+    for (const c of queued) {
+      await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+    }
+  }, []);
 
   const createPeerConnection = useCallback(
     (toEmail, callId) => {
@@ -82,7 +89,7 @@ export function useCall() {
           clearRingTimeout();
           setStatusSafe(CALL_STATUS.CONNECTED);
         }
-        if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        if (['failed', 'closed'].includes(pc.connectionState)) {
           cleanup();
         }
       };
@@ -102,6 +109,13 @@ export function useCall() {
     setLocalStream(stream);
     return stream;
   }, []);
+
+  const cancelOutgoing = useCallback(() => {
+    if (peerEmailRef.current && callIdRef.current) {
+      emitCancel({ toEmail: peerEmailRef.current, callId: callIdRef.current });
+    }
+    cleanup();
+  }, [cleanup]);
 
   const startCall = useCallback(
     async ({ toEmail, ticketId }) => {
@@ -134,7 +148,15 @@ export function useCall() {
 
       return callId;
     },
-    [user, getLocalAudioStream, createPeerConnection, cleanup, setStatusSafe, clearRingTimeout]
+    [
+      user,
+      getLocalAudioStream,
+      createPeerConnection,
+      cleanup,
+      setStatusSafe,
+      clearRingTimeout,
+      cancelOutgoing,
+    ]
   );
 
   const acceptCall = useCallback(async () => {
@@ -151,8 +173,7 @@ export function useCall() {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
       await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
-      pendingCandidatesRef.current.forEach((c) => pc.addIceCandidate(new RTCIceCandidate(c)));
-      pendingCandidatesRef.current = [];
+      await flushCandidates(pc, callId);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -162,25 +183,24 @@ export function useCall() {
       cleanup();
       throw err;
     }
-  }, [incomingCall, getLocalAudioStream, createPeerConnection, cleanup, setStatusSafe]);
+  }, [
+    incomingCall,
+    getLocalAudioStream,
+    createPeerConnection,
+    flushCandidates,
+    cleanup,
+    setStatusSafe,
+  ]);
 
   const rejectCall = useCallback(() => {
     if (!incomingCall) return;
     emitReject({ toEmail: incomingCall.fromEmail, callId: incomingCall.callId });
-    setIncomingCall(null);
-    setStatusSafe(CALL_STATUS.IDLE);
-  }, [incomingCall, setStatusSafe]);
+    cleanup();
+  }, [incomingCall, cleanup]);
 
   const endCall = useCallback(() => {
     if (peerEmailRef.current && callIdRef.current) {
       emitEnd({ toEmail: peerEmailRef.current, callId: callIdRef.current });
-    }
-    cleanup();
-  }, [cleanup]);
-
-  const cancelOutgoing = useCallback(() => {
-    if (peerEmailRef.current && callIdRef.current) {
-      emitCancel({ toEmail: peerEmailRef.current, callId: callIdRef.current });
     }
     cleanup();
   }, [cleanup]);
@@ -193,44 +213,53 @@ export function useCall() {
     setIsMuted(!track.enabled);
   }, [localStream]);
 
-  const attachSignalingListeners = useCallback(() => {
-    return bindCallListeners({
-      onInvite: ({ fromEmail, callId, ticketId, callerName }) => {
-        if (statusRef.current !== CALL_STATUS.IDLE) return; // already on a call
-        setIncomingCall({ fromEmail, callId, ticketId, callerName });
-        setStatusSafe(CALL_STATUS.RINGING_INCOMING);
-      },
-      onOffer: ({ fromEmail, callId, sdp }) => {
-        setIncomingCall((prev) =>
-          prev && prev.callId === callId
-            ? { ...prev, offerSdp: sdp }
-            : { fromEmail, callId, offerSdp: sdp }
-        );
-      },
-      onAnswer: async ({ callId, sdp }) => {
-        if (callIdRef.current !== callId || !pcRef.current) return;
-        clearRingTimeout();
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(sdp));
-        pendingCandidatesRef.current.forEach((c) =>
-          pcRef.current.addIceCandidate(new RTCIceCandidate(c))
-        );
-        pendingCandidatesRef.current = [];
-      },
-      onIceCandidate: ({ callId, candidate }) => {
-        if (callIdRef.current !== callId) return;
-        if (pcRef.current?.remoteDescription) {
-          pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } else {
-          pendingCandidatesRef.current.push(candidate);
-        }
-      },
-      onAccept: () => setStatusSafe(CALL_STATUS.CONNECTING),
-      onReject: () => cleanup(),
-      onCancel: () => cleanup(),
-      onEnd: () => cleanup(),
-      onBusy: () => cleanup(),
-    });
-  }, [cleanup, setStatusSafe, clearRingTimeout]);
+  const attachSignalingListeners = useCallback(
+    (socket) =>
+      bindCallListeners(
+        {
+          onInvite: ({ fromEmail, callId, ticketId, callerName }) => {
+            if (statusRef.current !== CALL_STATUS.IDLE) return;
+            setIncomingCall((prev) => ({
+              ...(prev && prev.callId === callId ? prev : {}),
+              fromEmail,
+              callId,
+              ticketId,
+              callerName,
+            }));
+            setStatusSafe(CALL_STATUS.RINGING_INCOMING);
+          },
+          onOffer: ({ fromEmail, callId, sdp }) => {
+            setIncomingCall((prev) =>
+              prev && prev.callId === callId
+                ? { ...prev, offerSdp: sdp }
+                : { fromEmail, callId, offerSdp: sdp }
+            );
+          },
+          onAnswer: async ({ callId, sdp }) => {
+            const pc = pcRef.current;
+            if (callIdRef.current !== callId || !pc) return;
+            clearRingTimeout();
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            await flushCandidates(pc, callId);
+          },
+          onIceCandidate: ({ callId, candidate }) => {
+            const pc = pcRef.current;
+            if (pc && callIdRef.current === callId && pc.remoteDescription) {
+              pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            } else {
+              (pendingCandidatesRef.current[callId] ||= []).push(candidate);
+            }
+          },
+          onAccept: () => setStatusSafe(CALL_STATUS.CONNECTING),
+          onReject: () => cleanup(),
+          onCancel: () => cleanup(),
+          onEnd: () => cleanup(),
+          onBusy: () => cleanup(),
+        },
+        socket
+      ),
+    [cleanup, setStatusSafe, clearRingTimeout, flushCandidates]
+  );
 
   return {
     status,

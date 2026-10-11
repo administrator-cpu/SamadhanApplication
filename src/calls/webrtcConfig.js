@@ -1,11 +1,16 @@
 // src/calls/webrtcConfig.js
+import Constants from 'expo-constants';
+
+const turn = Constants.expoConfig?.extra?.turn;
+
 export const RTC_CONFIG = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    // Add a TURN server for reliable NAT traversal in production, e.g:
-    // { urls: 'turn:your-turn-server:3478', username: 'user', credential: 'pass' },
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    ...(turn
+      ? [{ urls: turn.urls, username: turn.username, credential: turn.credential }]
+      : []),
   ],
+  iceCandidatePoolSize: 2,
 };
 
 export const CALL_STATUS = {

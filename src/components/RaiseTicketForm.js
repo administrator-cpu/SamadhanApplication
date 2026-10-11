@@ -350,7 +350,7 @@ export default function RaiseTicketForm({ role, listPath }) {
     ? [
       selectedCircuit.serviceType,
       formatBandwidth(selectedCircuit.bandwidth),
-      selectedCircuit.installationCode || selectedCircuit.aEndBtsId,
+      selectedCircuit.installationCode || (selectedCircuit.bEndBtsId === "N/A" ? selectedCircuit.aEndBtsId : selectedCircuit.bEndBtsId),
     ]
       .filter(Boolean)
       .join(' · ')
