@@ -92,13 +92,26 @@ export function CallProvider({ children }) {
     };
   }, [showIncoming]);
 
+  const handleAccept = async () => {
+    try {
+      await call.acceptCall();
+    } catch (err) {
+      Alert.alert(
+        'Call failed',
+        err?.reason === END_REASON.PERMISSION
+          ? 'Allow microphone access in Settings to answer calls.'
+          : 'Could not connect the call.'
+      );
+    }
+  };
+
   return (
     <CallContext.Provider value={call}>
       {children}
       {showIncoming && (
         <IncomingCallModal
           callerName={call.incomingCall.callerName}
-          onAccept={call.acceptCall}
+          onAccept={handleAccept}
           onReject={call.rejectCall}
         />
       )}
