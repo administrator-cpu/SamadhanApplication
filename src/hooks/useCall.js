@@ -50,6 +50,7 @@ export function useCall() {
 
   const pcRef = useRef(null);
   const callIdRef = useRef(null);
+  const ringingCallIdRef = useRef(null);
   const peerEmailRef = useRef(null);
   const pendingCandidatesRef = useRef({});
   const statusRef = useRef(CALL_STATUS.IDLE);
@@ -85,6 +86,7 @@ export function useCall() {
         pc.close();
       }
       callIdRef.current = null;
+      ringingCallIdRef.current = null;
       peerEmailRef.current = null;
       pendingCandidatesRef.current = {};
       setRemoteStream(null);
@@ -106,13 +108,10 @@ export function useCall() {
     [cleanup]
   );
 
-  const armTimeout = useCallback(
-    (ms, onFire) => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(onFire, ms);
-    },
-    []
-  );
+  const armTimeout = useCallback((ms, onFire) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(onFire, ms);
+  }, []);
 
   const armConnectTimeout = useCallback(() => {
     armTimeout(CONNECT_TIMEOUT_MS, () => {
@@ -124,7 +123,7 @@ export function useCall() {
     const queued = pendingCandidatesRef.current[callId] || [];
     delete pendingCandidatesRef.current[callId];
     for (const c of queued) {
-      await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => { });
+      await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
     }
   }, []);
 
@@ -251,6 +250,7 @@ export function useCall() {
     if (!incomingCall?.offerSdp) return;
     const { fromEmail, callId, offerSdp } = incomingCall;
     callIdRef.current = callId;
+    ringingCallIdRef.current = null;
     peerEmailRef.current = fromEmail;
     setEndReason(null);
     setStatusSafe(CALL_STATUS.CONNECTING);
@@ -299,9 +299,12 @@ export function useCall() {
         {
           onInvite: ({ fromEmail, callId, ticketId, callerName }) => {
             if (statusRef.current !== CALL_STATUS.IDLE) {
-              if (callId !== callIdRef.current) emitBusy({ toEmail: fromEmail, callId });
+              if (callId !== callIdRef.current && callId !== ringingCallIdRef.current) {
+                emitBusy({ toEmail: fromEmail, callId });
+              }
               return;
             }
+            ringingCallIdRef.current = callId;
             setIncomingCall((prev) => ({
               ...(prev && prev.callId === callId ? prev : {}),
               fromEmail,
@@ -316,6 +319,7 @@ export function useCall() {
           },
           onOffer: ({ fromEmail, callId, sdp }) => {
             if (callIdRef.current && callIdRef.current !== callId) return;
+            if (ringingCallIdRef.current && ringingCallIdRef.current !== callId) return;
             setIncomingCall((prev) =>
               prev && prev.callId === callId
                 ? { ...prev, offerSdp: sdp }
@@ -339,7 +343,7 @@ export function useCall() {
           onIceCandidate: ({ callId, candidate }) => {
             const pc = pcRef.current;
             if (pc && callIdRef.current === callId && pc.remoteDescription) {
-              pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => { });
+              pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
             } else {
               (pendingCandidatesRef.current[callId] ||= []).push(candidate);
             }
@@ -355,12 +359,10 @@ export function useCall() {
             if (!callId || callId === callIdRef.current) cleanup(END_REASON.REJECTED);
           },
           onCancel: ({ callId } = {}) => {
-            if (
-              statusRef.current === CALL_STATUS.RINGING_INCOMING ||
-              (callId && callId === callIdRef.current)
-            ) {
-              cleanup(END_REASON.NO_ANSWER);
-            }
+            const matches = callId
+              ? callId === ringingCallIdRef.current || callId === callIdRef.current
+              : statusRef.current === CALL_STATUS.RINGING_INCOMING;
+            if (matches) cleanup(END_REASON.NO_ANSWER);
           },
           onEnd: ({ callId } = {}) => {
             if (!callId || callId === callIdRef.current) cleanup(null);
