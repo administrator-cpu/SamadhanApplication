@@ -6,6 +6,7 @@ import { storage } from '../utils/storage';
 const SOCKET_URL = Constants.expoConfig?.extra?.apiUrl?.replace('/api', '') || '';
 
 let socket = null;
+let pending = null;
 const listeners = new Set();
 const notify = () => listeners.forEach((cb) => cb(socket));
 
@@ -16,26 +17,41 @@ export function onSocketChange(cb) {
 }
 
 export async function connectSocket() {
-  if (socket?.connected) return socket;
+  if (socket) {
+    if (!socket.active) socket.connect();
+    return socket;
+  }
+  if (pending) return pending;
 
-  const token = await storage.getItemAsync('auth_token');
-  if (!token) return null;
+  pending = (async () => {
+    const token = await storage.getItemAsync('auth_token');
+    if (!token) return null;
+    if (socket) return socket;
 
-  socket = io(SOCKET_URL, {
-    auth: { token },
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 10000,
-  });
+    socket = io(SOCKET_URL, {
+      auth: { token },
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+    });
 
-  notify();
-  return socket;
+    notify();
+    return socket;
+  })();
+
+  try {
+    return await pending;
+  } finally {
+    pending = null;
+  }
 }
 
 export function disconnectSocket() {
+  pending = null;
   if (socket) {
+    socket.removeAllListeners();
     socket.disconnect();
     socket = null;
     notify();

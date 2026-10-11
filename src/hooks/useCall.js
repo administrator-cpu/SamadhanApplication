@@ -6,7 +6,13 @@ import {
   RTCIceCandidate,
   mediaDevices,
 } from 'react-native-webrtc';
-import { RTC_CONFIG, CALL_STATUS } from '@/calls/webrtcConfig';
+import {
+  RTC_CONFIG,
+  CALL_STATUS,
+  RING_TIMEOUT_MS,
+  CONNECT_TIMEOUT_MS,
+  DISCONNECT_GRACE_MS,
+} from '@/calls/webrtcConfig';
 import {
   emitOffer,
   emitAnswer,
@@ -18,9 +24,19 @@ import {
   emitInvite,
   bindCallListeners,
 } from '@/sockets/callSignaling';
+import { connectSocket } from '@/sockets/socketManager';
 import { useAuthStore } from '@/store/authStore';
 
 export { CALL_STATUS };
+
+export const END_REASON = {
+  NO_ANSWER: 'no_answer',
+  REJECTED: 'rejected',
+  BUSY: 'busy',
+  NETWORK: 'network',
+  PERMISSION: 'permission',
+  OFFLINE: 'offline',
+};
 
 export function useCall() {
   const user = useAuthStore((s) => s.user);
@@ -29,48 +45,85 @@ export function useCall() {
   const [remoteStream, setRemoteStream] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [endReason, setEndReason] = useState(null);
 
   const pcRef = useRef(null);
   const callIdRef = useRef(null);
   const peerEmailRef = useRef(null);
-  const pendingCandidatesRef = useRef({}); // callId -> candidates[]
+  const pendingCandidatesRef = useRef({});
   const statusRef = useRef(CALL_STATUS.IDLE);
   const timeoutRef = useRef(null);
+  const graceRef = useRef(null);
 
   const setStatusSafe = useCallback((next) => {
     statusRef.current = next;
     setStatus(next);
   }, []);
 
-  const clearRingTimeout = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
+  const clearTimers = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (graceRef.current) clearTimeout(graceRef.current);
+    timeoutRef.current = null;
+    graceRef.current = null;
   }, []);
 
-  const cleanup = useCallback(() => {
-    clearRingTimeout();
-    setLocalStream((prev) => {
-      prev?.getTracks().forEach((t) => t.stop());
-      return null;
+  const cleanup = useCallback(
+    (reason = null) => {
+      clearTimers();
+      setLocalStream((prev) => {
+        prev?.getTracks().forEach((t) => t.stop());
+        return null;
+      });
+      const pc = pcRef.current;
+      pcRef.current = null;
+      if (pc) {
+        pc.onicecandidate = null;
+        pc.onconnectionstatechange = null;
+        pc.oniceconnectionstatechange = null;
+        pc.ontrack = null;
+        pc.close();
+      }
+      callIdRef.current = null;
+      peerEmailRef.current = null;
+      pendingCandidatesRef.current = {};
+      setRemoteStream(null);
+      setIsMuted(false);
+      setIncomingCall(null);
+      setEndReason(reason);
+      setStatusSafe(CALL_STATUS.IDLE);
+    },
+    [setStatusSafe, clearTimers]
+  );
+
+  const hangUp = useCallback(
+    (reason) => {
+      if (peerEmailRef.current && callIdRef.current) {
+        emitEnd({ toEmail: peerEmailRef.current, callId: callIdRef.current });
+      }
+      cleanup(reason);
+    },
+    [cleanup]
+  );
+
+  const armTimeout = useCallback(
+    (ms, onFire) => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(onFire, ms);
+    },
+    []
+  );
+
+  const armConnectTimeout = useCallback(() => {
+    armTimeout(CONNECT_TIMEOUT_MS, () => {
+      if (statusRef.current !== CALL_STATUS.CONNECTED) hangUp(END_REASON.NETWORK);
     });
-    pcRef.current?.close();
-    pcRef.current = null;
-    callIdRef.current = null;
-    peerEmailRef.current = null;
-    pendingCandidatesRef.current = {};
-    setRemoteStream(null);
-    setIsMuted(false);
-    setIncomingCall(null);
-    setStatusSafe(CALL_STATUS.IDLE);
-  }, [setStatusSafe, clearRingTimeout]);
+  }, [armTimeout, hangUp]);
 
   const flushCandidates = useCallback(async (pc, callId) => {
     const queued = pendingCandidatesRef.current[callId] || [];
     delete pendingCandidatesRef.current[callId];
     for (const c of queued) {
-      await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+      await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => { });
     }
   }, []);
 
@@ -79,96 +132,133 @@ export function useCall() {
       const pc = new RTCPeerConnection(RTC_CONFIG);
 
       pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          emitIceCandidate({ toEmail, callId, candidate: e.candidate });
-        }
+        if (e.candidate) emitIceCandidate({ toEmail, callId, candidate: e.candidate });
       };
 
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') {
-          clearRingTimeout();
+      const onState = () => {
+        if (pcRef.current !== pc) return;
+        const state = pc.connectionState || pc.iceConnectionState;
+
+        if (state === 'connected' || state === 'completed') {
+          clearTimers();
           setStatusSafe(CALL_STATUS.CONNECTED);
+          return;
         }
-        if (['failed', 'closed'].includes(pc.connectionState)) {
-          cleanup();
+        if (state === 'disconnected') {
+          if (graceRef.current) return;
+          graceRef.current = setTimeout(() => {
+            graceRef.current = null;
+            const s = pc.connectionState || pc.iceConnectionState;
+            if (pcRef.current === pc && s !== 'connected' && s !== 'completed') {
+              hangUp(END_REASON.NETWORK);
+            }
+          }, DISCONNECT_GRACE_MS);
+          return;
         }
+        if (state === 'failed') hangUp(END_REASON.NETWORK);
       };
+
+      pc.onconnectionstatechange = onState;
+      pc.oniceconnectionstatechange = onState;
 
       pc.ontrack = (e) => {
-        setRemoteStream(e.streams[0]);
+        if (e.streams?.[0]) setRemoteStream(e.streams[0]);
       };
 
       pcRef.current = pc;
       return pc;
     },
-    [cleanup, setStatusSafe, clearRingTimeout]
+    [clearTimers, setStatusSafe, hangUp]
   );
 
   const getLocalAudioStream = useCallback(async () => {
-    const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-    setLocalStream(stream);
-    return stream;
+    try {
+      const stream = await mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+      setLocalStream(stream);
+      return stream;
+    } catch (err) {
+      const e = new Error('Microphone permission denied');
+      e.reason = END_REASON.PERMISSION;
+      throw e;
+    }
   }, []);
 
   const cancelOutgoing = useCallback(() => {
     if (peerEmailRef.current && callIdRef.current) {
       emitCancel({ toEmail: peerEmailRef.current, callId: callIdRef.current });
     }
-    cleanup();
+    cleanup(END_REASON.NO_ANSWER);
   }, [cleanup]);
 
   const startCall = useCallback(
     async ({ toEmail, ticketId }) => {
+      if (statusRef.current !== CALL_STATUS.IDLE) return null;
+
       const callId = `${user.id}-${Date.now()}`;
       callIdRef.current = callId;
       peerEmailRef.current = toEmail;
+      setEndReason(null);
       setStatusSafe(CALL_STATUS.RINGING_OUTGOING);
 
       try {
         const stream = await getLocalAudioStream();
+
+        const socket = await connectSocket();
+        if (!socket?.connected) {
+          await new Promise((resolve, reject) => {
+            if (!socket) return reject(Object.assign(new Error('offline'), { reason: END_REASON.OFFLINE }));
+            const t = setTimeout(() => {
+              socket.off('connect', ok);
+              reject(Object.assign(new Error('offline'), { reason: END_REASON.OFFLINE }));
+            }, 5000);
+            function ok() {
+              clearTimeout(t);
+              resolve();
+            }
+            socket.once('connect', ok);
+          });
+        }
+
+        if (callIdRef.current !== callId) return null;
+
         const pc = createPeerConnection(toEmail, callId);
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
         emitInvite({ toEmail, ticketId, callId, callerName: user.name });
 
-        const offer = await pc.createOffer({});
+        const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
         await pc.setLocalDescription(offer);
         emitOffer({ toEmail, callId, sdp: pc.localDescription });
 
-        clearRingTimeout();
-        timeoutRef.current = setTimeout(() => {
-          if (statusRef.current === CALL_STATUS.RINGING_OUTGOING) {
-            cancelOutgoing();
-          }
-        }, 30000);
+        armTimeout(RING_TIMEOUT_MS, () => {
+          if (statusRef.current === CALL_STATUS.RINGING_OUTGOING) cancelOutgoing();
+        });
       } catch (err) {
-        cleanup();
+        cleanup(err?.reason ?? END_REASON.NETWORK);
         throw err;
       }
 
       return callId;
     },
-    [
-      user,
-      getLocalAudioStream,
-      createPeerConnection,
-      cleanup,
-      setStatusSafe,
-      clearRingTimeout,
-      cancelOutgoing,
-    ]
+    [user, getLocalAudioStream, createPeerConnection, cleanup, setStatusSafe, armTimeout, cancelOutgoing]
   );
 
   const acceptCall = useCallback(async () => {
-    if (!incomingCall) return;
+    if (!incomingCall?.offerSdp) return;
     const { fromEmail, callId, offerSdp } = incomingCall;
     callIdRef.current = callId;
     peerEmailRef.current = fromEmail;
+    setEndReason(null);
     setStatusSafe(CALL_STATUS.CONNECTING);
     setIncomingCall(null);
 
     try {
       const stream = await getLocalAudioStream();
+      if (callIdRef.current !== callId) return;
+
       const pc = createPeerConnection(fromEmail, callId);
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -179,18 +269,13 @@ export function useCall() {
       await pc.setLocalDescription(answer);
       emitAnswer({ toEmail: fromEmail, callId, sdp: pc.localDescription });
       emitAccept({ toEmail: fromEmail, callId });
+      armConnectTimeout();
     } catch (err) {
-      cleanup();
+      emitReject({ toEmail: fromEmail, callId });
+      cleanup(err?.reason ?? END_REASON.NETWORK);
       throw err;
     }
-  }, [
-    incomingCall,
-    getLocalAudioStream,
-    createPeerConnection,
-    flushCandidates,
-    cleanup,
-    setStatusSafe,
-  ]);
+  }, [incomingCall, getLocalAudioStream, createPeerConnection, flushCandidates, cleanup, setStatusSafe, armConnectTimeout]);
 
   const rejectCall = useCallback(() => {
     if (!incomingCall) return;
@@ -198,16 +283,10 @@ export function useCall() {
     cleanup();
   }, [incomingCall, cleanup]);
 
-  const endCall = useCallback(() => {
-    if (peerEmailRef.current && callIdRef.current) {
-      emitEnd({ toEmail: peerEmailRef.current, callId: callIdRef.current });
-    }
-    cleanup();
-  }, [cleanup]);
+  const endCall = useCallback(() => hangUp(null), [hangUp]);
 
   const toggleMute = useCallback(() => {
-    if (!localStream) return;
-    const track = localStream.getAudioTracks()[0];
+    const track = localStream?.getAudioTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
     setIsMuted(!track.enabled);
@@ -227,8 +306,12 @@ export function useCall() {
               callerName,
             }));
             setStatusSafe(CALL_STATUS.RINGING_INCOMING);
+            armTimeout(RING_TIMEOUT_MS + 5000, () => {
+              if (statusRef.current === CALL_STATUS.RINGING_INCOMING) cleanup(END_REASON.NO_ANSWER);
+            });
           },
           onOffer: ({ fromEmail, callId, sdp }) => {
+            if (callIdRef.current && callIdRef.current !== callId) return;
             setIncomingCall((prev) =>
               prev && prev.callId === callId
                 ? { ...prev, offerSdp: sdp }
@@ -237,28 +320,54 @@ export function useCall() {
           },
           onAnswer: async ({ callId, sdp }) => {
             const pc = pcRef.current;
-            if (callIdRef.current !== callId || !pc) return;
-            clearRingTimeout();
-            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-            await flushCandidates(pc, callId);
+            if (callIdRef.current !== callId || !pc || pc.remoteDescription) return;
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+              await flushCandidates(pc, callId);
+              if (statusRef.current !== CALL_STATUS.CONNECTED) {
+                setStatusSafe(CALL_STATUS.CONNECTING);
+                armConnectTimeout();
+              }
+            } catch {
+              hangUp(END_REASON.NETWORK);
+            }
           },
           onIceCandidate: ({ callId, candidate }) => {
             const pc = pcRef.current;
             if (pc && callIdRef.current === callId && pc.remoteDescription) {
-              pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+              pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => { });
             } else {
               (pendingCandidatesRef.current[callId] ||= []).push(candidate);
             }
           },
-          onAccept: () => setStatusSafe(CALL_STATUS.CONNECTING),
-          onReject: () => cleanup(),
-          onCancel: () => cleanup(),
-          onEnd: () => cleanup(),
-          onBusy: () => cleanup(),
+          onAccept: ({ callId } = {}) => {
+            if (callId && callId !== callIdRef.current) return;
+            if (statusRef.current === CALL_STATUS.RINGING_OUTGOING) {
+              setStatusSafe(CALL_STATUS.CONNECTING);
+              armConnectTimeout();
+            }
+          },
+          onReject: ({ callId } = {}) => {
+            if (!callId || callId === callIdRef.current) cleanup(END_REASON.REJECTED);
+          },
+          onCancel: ({ callId } = {}) => {
+            if (
+              statusRef.current === CALL_STATUS.RINGING_INCOMING ||
+              (callId && callId === callIdRef.current)
+            ) {
+              cleanup(END_REASON.NO_ANSWER);
+            }
+          },
+          onEnd: ({ callId } = {}) => {
+            if (!callId || callId === callIdRef.current) cleanup(null);
+          },
+          onBusy: ({ callId } = {}) => {
+            if (!callId || callId === callIdRef.current) cleanup(END_REASON.BUSY);
+          },
         },
         socket
       ),
-    [cleanup, setStatusSafe, clearRingTimeout, flushCandidates]
+    [cleanup, hangUp, setStatusSafe, armTimeout, armConnectTimeout, flushCandidates]
   );
 
   return {
@@ -267,6 +376,7 @@ export function useCall() {
     remoteStream,
     isMuted,
     incomingCall,
+    endReason,
     startCall,
     acceptCall,
     rejectCall,
