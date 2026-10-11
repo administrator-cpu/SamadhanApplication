@@ -22,6 +22,7 @@ import {
   emitCancel,
   emitEnd,
   emitInvite,
+  emitBusy,
   bindCallListeners,
 } from '@/sockets/callSignaling';
 import { connectSocket } from '@/sockets/socketManager';
@@ -297,7 +298,10 @@ export function useCall() {
       bindCallListeners(
         {
           onInvite: ({ fromEmail, callId, ticketId, callerName }) => {
-            if (statusRef.current !== CALL_STATUS.IDLE) return;
+            if (statusRef.current !== CALL_STATUS.IDLE) {
+              if (callId !== callIdRef.current) emitBusy({ toEmail: fromEmail, callId });
+              return;
+            }
             setIncomingCall((prev) => ({
               ...(prev && prev.callId === callId ? prev : {}),
               fromEmail,

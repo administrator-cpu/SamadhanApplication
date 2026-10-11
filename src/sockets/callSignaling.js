@@ -45,6 +45,10 @@ export function emitEnd({ toEmail, callId }) {
   getSocket()?.emit(CALL_EVENTS.END, { toEmail, callId });
 }
 
+export function emitBusy({ toEmail, callId }) {
+  getSocket()?.emit(CALL_EVENTS.BUSY, { toEmail, callId });
+}
+
 export function bindCallListeners(handlers, socket = getSocket()) {
   if (!socket) return () => {};
 

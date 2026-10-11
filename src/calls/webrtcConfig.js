@@ -24,6 +24,6 @@ export const CALL_STATUS = {
   ENDED: 'ended',
 };
 
-export const RING_TIMEOUT_MS = 30000;
 export const CONNECT_TIMEOUT_MS = 20000;
 export const DISCONNECT_GRACE_MS = 8000;
+export const RING_TIMEOUT_MS = 45000;
