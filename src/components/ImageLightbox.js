@@ -181,7 +181,7 @@ export function LightboxContent({ url, onClose }) {
     setActionState('saving');
     try {
       const localUri = await downloadImageForAction(url);
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Please allow photo library access in your device settings to save images.');
         return;

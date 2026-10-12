@@ -34,6 +34,13 @@ export default ({ config }) => {
         foregroundImage: "./assets/adaptive-icon.png",
       },
       permissions: ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
+      blockedPermissions: [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+      ],
     },
     ios: {
       bundleIdentifier: envConfig.androidPackage,
@@ -48,6 +55,19 @@ export default ({ config }) => {
       backgroundColor: "#ffffff",
     },
     plugins: [
+      [
+        "expo-build-properties",
+        {
+          android: {
+            enableMinifyInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: true,
+            extraProguardRules: [
+              "-keep class org.webrtc.** { *; }",
+              "-dontwarn org.webrtc.**",
+            ].join("\n"),
+          },
+        },
+      ],
       "expo-video",
       "expo-audio",
       "expo-router",
