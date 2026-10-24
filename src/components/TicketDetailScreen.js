@@ -564,7 +564,12 @@ export default function TicketDetailScreen() {
             <Feather name="chevron-down" size={16} color={C.faint} />
           </TouchableOpacity>
           {contactPerson?.email && (
-            <CallButton toEmail={contactPerson.email} ticketId={ticket?.id} />
+            <CallButton
+              toEmail={contactPerson.email}
+              ticketId={ticket?.id}
+              ticketNumber={ticket?.ticket_no}
+              peerName={contactPerson.name}
+            />
           )}
           <RoundButton icon="more-vertical" onPress={() => setMenuVisible(true)} />
         </View>

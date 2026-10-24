@@ -11,14 +11,17 @@ const MESSAGES = {
   [END_REASON.NETWORK]: 'Could not start the call. Try again.',
 };
 
-export default function CallButton({ toEmail, ticketId }) {
+export default function CallButton({ toEmail, ticketId, peerName, ticketNumber }) {
   const call = useCallContext();
 
   const onPress = async () => {
     try {
-      await call.startCall({ toEmail, ticketId });
+      await call.startCall({ toEmail, ticketId, peerName, ticketNumber });
     } catch (err) {
-      Alert.alert('Call failed', MESSAGES[err?.reason] ?? MESSAGES[END_REASON.NETWORK]);
+      setTimeout(
+        () => Alert.alert('Call failed', MESSAGES[err?.reason] ?? MESSAGES[END_REASON.NETWORK]),
+        400
+      );
     }
   };
 

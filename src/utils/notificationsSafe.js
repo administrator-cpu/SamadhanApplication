@@ -21,7 +21,15 @@ const stub = {
   setBadgeCountAsync: async () => {},
   addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
   addNotificationReceivedListener: () => ({ remove: () => {} }),
-  AndroidImportance: { MAX: 5 },
+  getLastNotificationResponseAsync: async () => null,
+  clearLastNotificationResponseAsync: async () => {},
+  setNotificationCategoryAsync: async () => null,
+  getPresentedNotificationsAsync: async () => [],
+  dismissNotificationAsync: async () => {},
+  AndroidImportance: { HIGH: 4, MAX: 5 },
+  AndroidNotificationVisibility: { PUBLIC: 1 },
+  AndroidAudioUsage: { NOTIFICATION_RINGTONE: 6 },
+  AndroidAudioContentType: { SONIFICATION: 4 },
 };
 
 export default Notifications || stub;

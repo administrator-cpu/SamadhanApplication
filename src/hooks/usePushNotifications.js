@@ -8,13 +8,53 @@ import { useRouter } from 'expo-router';
 import { userService } from '../api/userService';
 import { useAuthStore } from '../store/authStore';
 
+const SILENT_IN_FOREGROUND = new Set(['call_invite']);
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const type = notification?.request?.content?.data?.type;
+    const show = !SILENT_IN_FOREGROUND.has(type);
+    return {
+      shouldShowAlert: show,
+      shouldShowBanner: show,
+      shouldShowList: show,
+      shouldPlaySound: show,
+      shouldSetBadge: false,
+    };
+  },
 });
+
+async function setupAndroidChannels() {
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'default',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#2563eb',
+  });
+  await Notifications.setNotificationChannelAsync('incoming_call', {
+    name: 'Incoming calls',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'incoming_ring.wav',
+    enableVibrate: true,
+    vibrationPattern: [0, 1000, 800, 1000, 800, 1000],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    audioAttributes: {
+      usage: Notifications.AndroidAudioUsage.NOTIFICATION_RINGTONE,
+      contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+    },
+  });
+  await Notifications.setNotificationChannelAsync('missed_call', {
+    name: 'Missed calls',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+  });
+}
+
+async function setupCategories() {
+  await Notifications.setNotificationCategoryAsync('incoming_call', [
+    { identifier: 'answer', buttonTitle: 'Answer', options: { opensAppToForeground: true } },
+  ]);
+}
 
 async function registerForPushNotifications() {
   if (!isPushAvailable) return null;
@@ -35,13 +75,9 @@ async function registerForPushNotifications() {
   }
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2563eb',
-    });
+    await setupAndroidChannels().catch(() => {});
   }
+  await setupCategories().catch(() => {});
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId;
   const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });

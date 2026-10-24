@@ -1,5 +1,6 @@
 // src/hooks/useCall.js
 import { useCallback, useRef, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 import {
   RTCPeerConnection,
   RTCSessionDescription,
@@ -37,6 +38,7 @@ export const END_REASON = {
   NETWORK: 'network',
   PERMISSION: 'permission',
   OFFLINE: 'offline',
+  UNAVAILABLE: 'unavailable',
 };
 
 export function useCall() {
@@ -47,6 +49,8 @@ export function useCall() {
   const [isMuted, setIsMuted] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [endReason, setEndReason] = useState(null);
+  const [peer, setPeer] = useState(null);
+  const [ringback, setRingback] = useState(null);
 
   const pcRef = useRef(null);
   const callIdRef = useRef(null);
@@ -92,6 +96,8 @@ export function useCall() {
       setRemoteStream(null);
       setIsMuted(false);
       setIncomingCall(null);
+      setPeer(null);
+      setRingback(null);
       setEndReason(reason);
       setStatusSafe(CALL_STATUS.IDLE);
     },
@@ -171,20 +177,30 @@ export function useCall() {
     [clearTimers, setStatusSafe, hangUp]
   );
 
+  const ensureMicPermission = useCallback(async () => {
+    if (Platform.OS !== 'android') return;
+    const perm = PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
+    if (await PermissionsAndroid.check(perm)) return;
+    const res = await PermissionsAndroid.request(perm);
+    if (res !== PermissionsAndroid.RESULTS.GRANTED) {
+      throw Object.assign(new Error('Microphone permission denied'), { reason: END_REASON.PERMISSION });
+    }
+  }, []);
+
   const getLocalAudioStream = useCallback(async () => {
+    await ensureMicPermission();
     try {
       const stream = await mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
+      if (!stream?.getAudioTracks().length) throw new Error('no audio track');
       setLocalStream(stream);
       return stream;
-    } catch (err) {
-      const e = new Error('Microphone permission denied');
-      e.reason = END_REASON.PERMISSION;
-      throw e;
+    } catch {
+      throw Object.assign(new Error('Microphone unavailable'), { reason: END_REASON.PERMISSION });
     }
-  }, []);
+  }, [ensureMicPermission]);
 
   const cancelOutgoing = useCallback(() => {
     if (peerEmailRef.current && callIdRef.current) {
@@ -194,12 +210,19 @@ export function useCall() {
   }, [cleanup]);
 
   const startCall = useCallback(
-    async ({ toEmail, ticketId }) => {
+    async ({ toEmail, ticketId, peerName, ticketNumber }) => {
+      if (statusRef.current !== CALL_STATUS.IDLE) return null;
+      if (!toEmail || !user?.id) {
+        throw Object.assign(new Error('Call unavailable'), { reason: END_REASON.NETWORK });
+      }
+
+      await ensureMicPermission();
       if (statusRef.current !== CALL_STATUS.IDLE) return null;
 
       const callId = `${user.id}-${Date.now()}`;
       callIdRef.current = callId;
       peerEmailRef.current = toEmail;
+      setPeer({ name: peerName || toEmail, ticketNumber: ticketNumber ?? null });
       setEndReason(null);
       setStatusSafe(CALL_STATUS.RINGING_OUTGOING);
 
@@ -227,7 +250,7 @@ export function useCall() {
         const pc = createPeerConnection(toEmail, callId);
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-        emitInvite({ toEmail, ticketId, callId, callerName: user.name });
+        emitInvite({ toEmail, ticketId, ticketNumber, callId, callerName: user.name });
 
         const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
         await pc.setLocalDescription(offer);
@@ -243,15 +266,16 @@ export function useCall() {
 
       return callId;
     },
-    [user, getLocalAudioStream, createPeerConnection, cleanup, setStatusSafe, armTimeout, cancelOutgoing]
+    [user, ensureMicPermission, getLocalAudioStream, createPeerConnection, cleanup, setStatusSafe, armTimeout, cancelOutgoing]
   );
 
   const acceptCall = useCallback(async () => {
     if (!incomingCall?.offerSdp) return;
-    const { fromEmail, callId, offerSdp } = incomingCall;
+    const { fromEmail, callId, offerSdp, callerName, ticketNumber } = incomingCall;
     callIdRef.current = callId;
     ringingCallIdRef.current = null;
     peerEmailRef.current = fromEmail;
+    setPeer({ name: callerName || fromEmail, ticketNumber: ticketNumber ?? null });
     setEndReason(null);
     setStatusSafe(CALL_STATUS.CONNECTING);
     setIncomingCall(null);
@@ -297,7 +321,7 @@ export function useCall() {
     (socket) =>
       bindCallListeners(
         {
-          onInvite: ({ fromEmail, callId, ticketId, callerName }) => {
+          onInvite: ({ fromEmail, callId, ticketId, ticketNumber, callerName }) => {
             if (statusRef.current !== CALL_STATUS.IDLE) {
               if (callId !== callIdRef.current && callId !== ringingCallIdRef.current) {
                 emitBusy({ toEmail: fromEmail, callId });
@@ -310,6 +334,7 @@ export function useCall() {
               fromEmail,
               callId,
               ticketId,
+              ticketNumber,
               callerName,
             }));
             setStatusSafe(CALL_STATUS.RINGING_INCOMING);
@@ -364,6 +389,16 @@ export function useCall() {
               : statusRef.current === CALL_STATUS.RINGING_INCOMING;
             if (matches) cleanup(END_REASON.NO_ANSWER);
           },
+          onRinging: ({ callId, tune } = {}) => {
+            if (callId !== callIdRef.current) return;
+            if (statusRef.current !== CALL_STATUS.RINGING_OUTGOING) return;
+            setRingback({ tune: tune || null });
+          },
+          onUnavailable: ({ callId } = {}) => {
+            if (callId === callIdRef.current && statusRef.current === CALL_STATUS.RINGING_OUTGOING) {
+              cleanup(END_REASON.UNAVAILABLE);
+            }
+          },
           onEnd: ({ callId } = {}) => {
             if (!callId || callId === callIdRef.current) cleanup(null);
           },
@@ -383,6 +418,9 @@ export function useCall() {
     isMuted,
     incomingCall,
     endReason,
+    ringback,
+    peerName: peer?.name ?? null,
+    ticketNumber: peer?.ticketNumber ?? null,
     startCall,
     acceptCall,
     rejectCall,

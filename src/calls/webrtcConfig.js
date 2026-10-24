@@ -1,4 +1,20 @@
 // src/calls/webrtcConfig.js
+const TURN_URLS = (process.env.EXPO_PUBLIC_TURN_URLS || '')
+  .split(',')
+  .map((u) => u.trim())
+  .filter(Boolean);
+
+const TURN_SERVER =
+  TURN_URLS.length && process.env.EXPO_PUBLIC_TURN_USERNAME && process.env.EXPO_PUBLIC_TURN_CREDENTIAL
+    ? [
+        {
+          urls: TURN_URLS,
+          username: process.env.EXPO_PUBLIC_TURN_USERNAME,
+          credential: process.env.EXPO_PUBLIC_TURN_CREDENTIAL,
+        },
+      ]
+    : [];
+
 export const RTC_CONFIG = {
   iceServers: [
     {
@@ -9,6 +25,7 @@ export const RTC_CONFIG = {
         'stun:stun.cloudflare.com:3478',
       ],
     },
+    ...TURN_SERVER,
   ],
   iceCandidatePoolSize: 4,
   bundlePolicy: 'max-bundle',

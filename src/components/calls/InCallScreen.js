@@ -18,7 +18,7 @@ const C = {
 };
 
 const STATUS_LABEL = {
-  [CALL_STATUS.RINGING_OUTGOING]: 'Ringing…',
+  [CALL_STATUS.RINGING_OUTGOING]: 'Calling…',
   [CALL_STATUS.CONNECTING]: 'Connecting…',
   [CALL_STATUS.CONNECTED]: 'Connected',
 };
@@ -176,8 +176,9 @@ function SoftAction({ icon, label, active, onPress, disabled }) {
 export default function InCallScreen({ call }) {
   const isOutgoingRinging = call.status === CALL_STATUS.RINGING_OUTGOING;
   const isConnected = call.status === CALL_STATUS.CONNECTED;
-  const displayName = call.incomingCall?.callerName ?? 'Calling…';
+  const displayName = call.peerName ?? call.incomingCall?.callerName ?? 'Calling…';
   const elapsed = useElapsed(isConnected);
+  const statusLabel = isOutgoingRinging && call.ringback ? 'Ringing…' : STATUS_LABEL[call.status];
   const [speakerOn, setSpeakerOn] = useState(false);
   const speakerActive = call.isSpeaker ?? speakerOn;
   const onSpeaker = call.toggleSpeaker ?? (() => setSpeakerOn((v) => !v));
@@ -222,7 +223,7 @@ export default function InCallScreen({ call }) {
             <Text style={styles.name} numberOfLines={1}>
               {displayName}
             </Text>
-            <Text style={[styles.status, isConnected && styles.statusLive]}>{STATUS_LABEL[call.status]}</Text>
+            <Text style={[styles.status, isConnected && styles.statusLive]}>{statusLabel}</Text>
           </View>
 
           <View style={styles.stage}>

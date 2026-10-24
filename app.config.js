@@ -80,7 +80,10 @@ export default ({ config }) => {
       "expo-secure-store",
       [
         "expo-notifications",
-        { color: "#2563eb" },
+        {
+          color: "#2563eb",
+          sounds: ["./assets/sounds/incoming_ring.wav"],
+        },
       ],
       [
         "expo-image-picker",

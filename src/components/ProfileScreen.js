@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../store/authStore';
 import { useUpdateMyProfile, useUploadProfileImage, useRemoveProfileImage } from '../hooks/useCustomers';
+import CallerTuneCard from './calls/CallerTuneCard';
 
 const STAFF_ROLES = ['SUPPORT_AGENT', 'ADMIN', 'SALES'];
 const ROLE_LABELS = {
@@ -694,6 +695,8 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
+
+        {!isEditing && <CallerTuneCard />}
 
         {/* ── LOG OUT ────────────────────────────────────────── */}
         {!isEditing && (
