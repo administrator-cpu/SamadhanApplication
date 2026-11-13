@@ -5,10 +5,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { setOnSessionExpired } from '../src/api/client';
 import { useAuthStore } from '../src/store/authStore';
 import { queryClient, persistOptions } from '../src/api/queryClient';
 import '../global.css';
+import '../src/components/layout/interop';
 import InitializingScreen from '../src/components/InitializingScreen';
 import OfflineBanner from '../src/components/OfflineBanner';
 import { useBadgeCount } from '../src/hooks/useBadgeCount';
@@ -119,8 +121,7 @@ function RootLayoutNav() {
 
   return (
     <>
-      <StatusBar style="auto" />
-      <OfflineBanner />
+      <StatusBar style="dark" />
       <CallProvider>
         <Stack
           screenOptions={{
@@ -139,6 +140,7 @@ function RootLayoutNav() {
           <Stack.Screen name="(sales)" />
         </Stack>
       </CallProvider>
+      <OfflineBanner />
     </>
   );
 }
@@ -146,9 +148,11 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-        <RootLayoutNav />
-      </PersistQueryClientProvider>
+      <KeyboardProvider>
+        <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+          <RootLayoutNav />
+        </PersistQueryClientProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

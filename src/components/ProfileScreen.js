@@ -6,9 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView,
-  Alert,
+  Alert, StyleSheet,
 } from 'react-native';
+import Screen, { ScreenScrollView, StickyFooter } from './layout/Screen';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -46,46 +46,28 @@ const C = {
   dangerBd: '#f0a8b6',
 };
 
-const CARD = {
-  backgroundColor: C.card,
-  borderRadius: 26,
-  padding: 18,
-  shadowColor: '#151233',
-  shadowOpacity: 0.06,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 2,
-};
+const CARD = 'bg-[#ffffff] rounded-[26px] p-[18px]';
 
-function Field({ label, hint, hintColor, icon, focused, invalid, children }) {
+// Save bar (56) + gap, so the last card clears it in edit mode.
+const SAVE_BAR_SPACE = 56 + 12 + 24;
+
+function Field({ label, hint, hintError, icon, focused, invalid, children }) {
   return (
     <View>
       <Text
-        className="font-sans-semibold"
-        style={{ fontSize: 11, letterSpacing: 0.7, textTransform: 'uppercase', color: C.sub, marginBottom: 8 }}
+        className="font-sans-semibold text-[11px] tracking-[0.7px] uppercase text-[#6d6a96] mb-[8px]"
       >
         {label}
       </Text>
       <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 11,
-          backgroundColor: C.field,
-          borderRadius: 18,
-          borderWidth: 1.5,
-          borderColor: invalid ? C.dangerBd : focused ? C.violet : 'transparent',
-          paddingHorizontal: 14,
-          minHeight: 54,
-        }}
+        className={`flex-row items-center gap-[11px] bg-[#f2f2f2] rounded-[18px] border-[1.5px] px-[14px] min-h-[54px] ${invalid ? 'border-[#f0a8b6]' : focused ? 'border-[#6c5ce7]' : 'border-transparent'}`}
       >
         <Feather name={icon} size={17} color={C.muted} />
         {children}
       </View>
       {hint ? (
         <Text
-          className="font-sans"
-          style={{ fontSize: 11.5, color: hintColor || C.muted, marginTop: 7, paddingLeft: 4 }}
+          className={`font-sans text-[11.5px] mt-[7px] pl-[4px] ${hintError ? 'text-[#b0233f]' : 'text-[#9d9ac0]'}`}
         >
           {hint}
         </Text>
@@ -190,74 +172,39 @@ export default function ProfileScreen() {
 
   const initial = (name || user?.name || '').trim()[0]?.toUpperCase() || '?';
   const nameValid = name.trim().length >= 2;
-  const avatarSize = isEditing ? 88 : 76;
+  const avatarBox = isEditing ? 'w-[88px] h-[88px]' : 'w-[76px] h-[76px]';
+  const avatarRound = isEditing ? 'rounded-[44px]' : 'rounded-[38px]';
 
   const Avatar = (
     <TouchableOpacity
       onPress={handlePickImage}
       disabled={imageUploading}
       activeOpacity={0.85}
-      style={{ width: avatarSize, height: avatarSize }}
+      className={avatarBox}
     >
       {imageUploading ? (
-        <View
-          style={{
-            width: avatarSize,
-            height: avatarSize,
-            borderRadius: avatarSize / 2,
-            backgroundColor: C.violetSoft,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        <View className={`bg-[#ebe8ff] items-center justify-center ${avatarBox} ${avatarRound}`}>
           <ActivityIndicator color={C.violet} size="large" />
         </View>
       ) : user?.profile_image ? (
         <Image
           source={{ uri: user.profile_image }}
-          style={{
-            width: avatarSize,
-            height: avatarSize,
-            borderRadius: avatarSize / 2,
-            backgroundColor: C.violetSoft,
-          }}
+          className={`bg-[#ebe8ff] ${avatarBox} ${avatarRound}`}
           contentFit="cover"
           transition={150}
           cachePolicy="disk"
         />
       ) : (
-        <View
-          style={{
-            width: avatarSize,
-            height: avatarSize,
-            borderRadius: avatarSize / 2,
-            backgroundColor: C.violetSoft,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        <View className={`bg-[#ebe8ff] items-center justify-center ${avatarBox} ${avatarRound}`}>
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: isEditing ? 34 : 30, color: C.violetDeep }}
+            className={`font-sans-semibold text-[#17006a] ${isEditing ? 'text-[34px]' : 'text-[30px]'}`}
           >
             {initial}
           </Text>
         </View>
       )}
       <View
-        style={{
-          position: 'absolute',
-          right: -2,
-          bottom: -2,
-          width: isEditing ? 32 : 30,
-          height: isEditing ? 32 : 30,
-          borderRadius: 16,
-          backgroundColor: C.violet,
-          borderWidth: 3,
-          borderColor: C.card,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        className={`absolute right-[-2px] bottom-[-2px] rounded-[16px] bg-[#6c5ce7] border-[3px] border-[#ffffff] items-center justify-center ${isEditing ? 'w-[32px] h-[32px]' : 'w-[30px] h-[30px]'}`}
       >
         <Feather name="camera" size={13} color="#ffffff" />
       </View>
@@ -265,71 +212,51 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: 28,
-          paddingBottom: isEditing ? 130 : 120,
-          gap: 14,
-        }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+    <Screen className="bg-[#fffcfb]">
+      <ScreenScrollView
+        className="flex-1"
+        keyboard
+        keyboardOffset={isEditing ? SAVE_BAR_SPACE : 24}
+        endSpace={isEditing ? SAVE_BAR_SPACE : 24}
+        contentContainerClassName="px-[12px] std:px-[16px] pt-[16px] gap-[14px]"
       >
         {/* ── HEADER ─────────────────────────────────────────── */}
         {isEditing ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+          <View className="flex-row items-center gap-[11px]">
             <TouchableOpacity
               onPress={handleCancelEdit}
               activeOpacity={0.8}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: C.card,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="w-[40px] h-[40px] rounded-[20px] bg-[#ffffff] items-center justify-center"
             >
               <Feather name="chevron-left" size={18} color={C.ink} />
             </TouchableOpacity>
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View className="flex-1 min-w-0">
               <Text
-                className="font-sans-semibold"
-                style={{ fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: C.violetDeep }}
+                className="font-sans-semibold text-[10px] tracking-[1.4px] uppercase text-[#17006a]"
               >
                 Account
               </Text>
-              <Text className="font-sans-semibold" style={{ fontSize: 20, color: C.ink, marginTop: 2 }}>
+              <Text className="font-sans-semibold text-[20px] text-[#04002a] mt-[2px]">
                 Edit profile
               </Text>
             </View>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
-            <View style={{ minWidth: 0 }}>
+          <View className="flex-row items-end justify-between gap-[10px]">
+            <View className="min-w-0">
               <Text
-                className="font-sans-semibold"
-                style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.violetDeep }}
+                className="font-sans-semibold text-[10.5px] tracking-[1.4px] uppercase text-[#17006a]"
               >
                 Account
               </Text>
-              <Text className="font-sans-semibold" style={{ fontSize: 31, color: C.ink, marginTop: 3 }}>
+              <Text className="font-sans-semibold text-[31px] text-[#04002a] mt-[3px]">
                 Profile
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => setIsEditing(true)}
               activeOpacity={0.8}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: C.card,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="w-[44px] h-[44px] rounded-[22px] bg-[#ffffff] items-center justify-center"
             >
               <Feather name="settings" size={18} color={C.ink} />
             </TouchableOpacity>
@@ -338,17 +265,10 @@ export default function ProfileScreen() {
 
         {saveError ? (
           <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 9,
-              backgroundColor: C.dangerBg,
-              borderRadius: 18,
-              padding: 14,
-            }}
+            className="flex-row items-center gap-[9px] bg-[#fee7ea] rounded-[18px] p-[14px]"
           >
             <Feather name="alert-circle" size={17} color={C.dangerInk} />
-            <Text className="font-sans-medium" style={{ flex: 1, fontSize: 13, color: C.dangerInk }}>
+            <Text className="font-sans-medium flex-1 text-[13px] text-[#b0233f]">
               {saveError.message || 'Failed to save changes.'}
             </Text>
           </View>
@@ -356,26 +276,17 @@ export default function ProfileScreen() {
 
         {/* ── IDENTITY / PHOTO CARD ──────────────────────────── */}
         {isEditing ? (
-          <View style={{ ...CARD, paddingVertical: 20, alignItems: 'center', gap: 14 }}>
+          <View className={`${CARD} py-[20px] items-center gap-[14px]`} style={sx.card}>
             {Avatar}
-            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+            <View className="flex-row gap-[10px] w-full">
               <TouchableOpacity
                 onPress={handlePickImage}
                 disabled={imageUploading}
                 activeOpacity={0.85}
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 7,
-                  backgroundColor: C.field,
-                  borderRadius: 999,
-                  minHeight: 44,
-                }}
+                className="flex-1 flex-row items-center justify-center gap-[7px] bg-[#f2f2f2] rounded-[999px] min-h-[44px]"
               >
                 <Feather name="upload" size={14} color={C.violetDeep} />
-                <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.violetDeep }}>
+                <Text className="font-sans-semibold text-[12.5px] text-[#17006a]">
                   Change photo
                 </Text>
               </TouchableOpacity>
@@ -383,53 +294,33 @@ export default function ProfileScreen() {
                 <TouchableOpacity
                   onPress={handleRemoveImage}
                   activeOpacity={0.85}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 7,
-                    backgroundColor: C.dangerBg,
-                    borderRadius: 999,
-                    minHeight: 44,
-                    paddingHorizontal: 16,
-                  }}
+                  className="flex-row items-center justify-center gap-[7px] bg-[#fee7ea] rounded-[999px] min-h-[44px] px-[12px] std:px-[16px]"
                 >
                   <Feather name="trash-2" size={14} color={C.dangerInk} />
-                  <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.dangerInk }}>
+                  <Text className="font-sans-semibold text-[12.5px] text-[#b0233f]">
                     Remove
                   </Text>
                 </TouchableOpacity>
               ) : null}
             </View>
-            <Text className="font-sans" style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>
+            <Text className="font-sans text-[11px] text-[#9d9ac0] text-center">
               Square image, under 5 MB
             </Text>
           </View>
         ) : (
-          <View style={{ ...CARD, gap: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+          <View className={`${CARD} gap-[16px]`} style={sx.card}>
+            <View className="flex-row items-center gap-[15px]">
               {Avatar}
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text className="font-sans-semibold" style={{ fontSize: 19, lineHeight: 23, color: C.ink }}>
+              <View className="flex-1 min-w-0">
+                <Text className="font-sans-semibold text-[19px] leading-[23px] text-[#04002a]">
                   {user?.name || 'Customer'}
                 </Text>
                 <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    alignSelf: 'flex-start',
-                    backgroundColor: C.violetSoft,
-                    borderRadius: 999,
-                    paddingHorizontal: 11,
-                    paddingVertical: 6,
-                    marginTop: 8,
-                  }}
+                  className="flex-row items-center gap-[6px] self-start bg-[#ebe8ff] rounded-[999px] px-[11px] py-[6px] mt-[8px]"
                 >
                   <Feather name="shield" size={11} color={C.violetDeep} />
                   <Text
-                    className="font-sans-semibold"
-                    style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: C.violetDeep }}
+                    className="font-sans-semibold text-[10px] tracking-[1.2px] uppercase text-[#17006a]"
                   >
                     {ROLE_LABELS[user?.role] || user?.role || 'CUSTOMER'}
                   </Text>
@@ -439,18 +330,10 @@ export default function ProfileScreen() {
             <TouchableOpacity
               onPress={() => setIsEditing(true)}
               activeOpacity={0.85}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                backgroundColor: C.field,
-                borderRadius: 999,
-                minHeight: 46,
-              }}
+              className="flex-row items-center justify-center gap-[8px] bg-[#f2f2f2] rounded-[999px] min-h-[46px]"
             >
               <Feather name="edit-2" size={15} color={C.violetDeep} />
-              <Text className="font-sans-semibold" style={{ fontSize: 13.5, color: C.violetDeep }}>
+              <Text className="font-sans-semibold text-[13.5px] text-[#17006a]">
                 Edit profile
               </Text>
             </TouchableOpacity>
@@ -459,36 +342,29 @@ export default function ProfileScreen() {
 
         {/* ── YOUR SERVICES (customer-only) ──────────────────── */}
         {!isEditing && !isStaff && (
-          <View style={{ gap: 10 }}>
+          <View className="gap-[10px]">
             <Text
-              className="font-sans-semibold"
-              style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.sub, paddingLeft: 4 }}
+              className="font-sans-semibold text-[10.5px] tracking-[1.4px] uppercase text-[#6d6a96] pl-[4px]"
             >
               Your services
             </Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View className="flex-row gap-[12px]">
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() => router.push('/(customer)/connections')}
-                style={{ ...CARD, flex: 1, padding: 16, gap: 11 }}
+                className={`${CARD} flex-1 p-[12px] std:p-[16px] gap-[11px]`}
+                style={sx.card}
               >
                 <View
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 16,
-                    backgroundColor: C.mint,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  className="w-[42px] h-[42px] rounded-[16px] bg-[#ccf7e4] items-center justify-center"
                 >
                   <Feather name="wifi" size={19} color={C.mintInk} />
                 </View>
                 <View>
-                  <Text className="font-sans-semibold" style={{ fontSize: 14, color: C.ink }}>
+                  <Text className="font-sans-semibold text-[14px] text-[#04002a]">
                     My connection
                   </Text>
-                  <Text className="font-sans" style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>
+                  <Text className="font-sans text-[11.5px] text-[#6d6a96] mt-[2px]">
                     View services
                   </Text>
                 </View>
@@ -497,25 +373,19 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() => router.push('/(customer)/analytics')}
-                style={{ ...CARD, flex: 1, padding: 16, gap: 11 }}
+                className={`${CARD} flex-1 p-[12px] std:p-[16px] gap-[11px]`}
+                style={sx.card}
               >
                 <View
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 16,
-                    backgroundColor: C.violetSoft,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  className="w-[42px] h-[42px] rounded-[16px] bg-[#ebe8ff] items-center justify-center"
                 >
                   <Feather name="bar-chart-2" size={19} color={C.violetDeep} />
                 </View>
                 <View>
-                  <Text className="font-sans-semibold" style={{ fontSize: 14, color: C.ink }}>
+                  <Text className="font-sans-semibold text-[14px] text-[#04002a]">
                     Analytics
                   </Text>
-                  <Text className="font-sans" style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>
+                  <Text className="font-sans text-[11.5px] text-[#6d6a96] mt-[2px]">
                     Uptime &amp; faults
                   </Text>
                 </View>
@@ -526,14 +396,14 @@ export default function ProfileScreen() {
 
         {/* ── DETAILS / EDIT FIELDS ──────────────────────────── */}
         {isEditing ? (
-          <View style={{ ...CARD, gap: 16 }}>
+          <View className={`${CARD} gap-[16px]`} style={sx.card}>
             <Field
               label="Account name"
               icon="user"
               focused={nameFocused}
               invalid={!nameValid}
               hint={nameValid ? 'Appears on your tickets and invoices' : 'Name must be at least 2 characters'}
-              hintColor={nameValid ? C.muted : C.dangerInk}
+              hintError={!nameValid}
             >
               <TextInput
                 value={name}
@@ -542,8 +412,7 @@ export default function ProfileScreen() {
                 onBlur={() => setNameFocused(false)}
                 placeholder="Enter your full name"
                 placeholderTextColor={C.muted}
-                className="font-sans-semibold"
-                style={{ flex: 1, minWidth: 0, fontSize: 14, color: C.ink, paddingVertical: 14 }}
+                className="font-sans-semibold flex-1 min-w-0 text-[14px] text-[#04002a] py-[14px]"
               />
             </Field>
 
@@ -561,113 +430,84 @@ export default function ProfileScreen() {
                 keyboardType="phone-pad"
                 placeholder="e.g. +91 98200 00000"
                 placeholderTextColor={C.muted}
-                className="font-sans-semibold"
-                style={{ flex: 1, minWidth: 0, fontSize: 14, color: C.ink, paddingVertical: 14 }}
+                className="font-sans-semibold flex-1 min-w-0 text-[14px] text-[#04002a] py-[14px]"
               />
             </Field>
 
             <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 11,
-                backgroundColor: C.bg,
-                borderRadius: 18,
-                paddingHorizontal: 14,
-                paddingVertical: 13,
-              }}
+              className="flex-row items-center gap-[11px] bg-[#fffcfb] rounded-[18px] px-[14px] py-[13px]"
             >
               <Feather name="lock" size={16} color={C.muted} />
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View className="flex-1 min-w-0">
                 <Text
-                  className="font-sans-medium"
-                  style={{ fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: C.muted }}
+                  className="font-sans-medium text-[10.5px] tracking-[0.9px] uppercase text-[#9d9ac0]"
                 >
                   Email address
                 </Text>
                 <Text
-                  className="font-sans-semibold"
-                  style={{ fontSize: 13, color: C.sub, marginTop: 3 }}
+                  className="font-sans-semibold text-[13px] text-[#6d6a96] mt-[3px]"
                   numberOfLines={1}
                 >
                   {user?.email || 'Not provided'}
                 </Text>
               </View>
-              <Text className="font-sans-medium" style={{ fontSize: 11, color: C.muted }}>
+              <Text className="font-sans-medium text-[11px] text-[#9d9ac0]">
                 Ask support
               </Text>
             </View>
           </View>
         ) : (
-          <View style={{ ...CARD, gap: 14 }}>
-            <Text className="font-sans-semibold" style={{ fontSize: 15, color: C.ink }}>
+          <View className={`${CARD} gap-[14px]`} style={sx.card}>
+            <Text className="font-sans-semibold text-[15px] text-[#04002a]">
               Contact details
             </Text>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13 }}>
+            <View className="flex-row items-center gap-[13px]">
               <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 14,
-                  backgroundColor: C.field,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="w-[40px] h-[40px] rounded-[14px] bg-[#f2f2f2] items-center justify-center"
               >
                 <Feather name="mail" size={17} color={C.sub} />
               </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View className="flex-1 min-w-0">
                 <Text
-                  className="font-sans-medium"
-                  style={{ fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: C.muted }}
+                  className="font-sans-medium text-[10.5px] tracking-[0.9px] uppercase text-[#9d9ac0]"
                 >
                   Email address
                 </Text>
                 <Text
-                  className="font-sans-semibold"
-                  style={{ fontSize: 13.5, color: C.ink, marginTop: 3 }}
+                  className="font-sans-semibold text-[13.5px] text-[#04002a] mt-[3px]"
                   numberOfLines={1}
                 >
                   {user?.email || 'Not provided'}
                 </Text>
               </View>
               <Text
-                className="font-sans-medium"
-                style={{ fontSize: 10, letterSpacing: 0.9, textTransform: 'uppercase', color: C.muted }}
+                className="font-sans-medium text-[10px] tracking-[0.9px] uppercase text-[#9d9ac0]"
               >
                 Locked
               </Text>
             </View>
 
-            <View style={{ height: 1, backgroundColor: C.rule }} />
+            <View className="h-[1px] bg-[#eeecf9]" />
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13 }}>
+            <View className="flex-row items-center gap-[13px]">
               <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 14,
-                  backgroundColor: C.field,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="w-[40px] h-[40px] rounded-[14px] bg-[#f2f2f2] items-center justify-center"
               >
                 <Feather name="phone" size={17} color={C.sub} />
               </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View className="flex-1 min-w-0">
                 <Text
-                  className="font-sans-medium"
-                  style={{ fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: C.muted }}
+                  className="font-sans-medium text-[10.5px] tracking-[0.9px] uppercase text-[#9d9ac0]"
                 >
                   Phone number
                 </Text>
                 {user?.phone ? (
-                  <Text className="font-sans-semibold" style={{ fontSize: 13.5, color: C.ink, marginTop: 3 }}>
+                  <Text className="font-sans-semibold text-[13.5px] text-[#04002a] mt-[3px]">
                     {user.phone}
                   </Text>
                 ) : (
-                  <Text className="font-sans" style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>
+                  <Text className="font-sans text-[12.5px] text-[#9d9ac0] mt-[3px]">
                     Not on file — we use it for outage calls
                   </Text>
                 )}
@@ -676,18 +516,10 @@ export default function ProfileScreen() {
                 <TouchableOpacity
                   onPress={() => setIsEditing(true)}
                   activeOpacity={0.85}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5,
-                    backgroundColor: C.mint,
-                    borderRadius: 999,
-                    paddingHorizontal: 13,
-                    paddingVertical: 9,
-                  }}
+                  className="flex-row items-center gap-[5px] bg-[#ccf7e4] rounded-[999px] px-[13px] py-[9px]"
                 >
                   <Feather name="plus" size={12} color={C.mintInk} />
-                  <Text className="font-sans-semibold" style={{ fontSize: 11.5, color: C.mintInk }}>
+                  <Text className="font-sans-semibold text-[11.5px] text-[#0f7a56]">
                     Add
                   </Text>
                 </TouchableOpacity>
@@ -703,54 +535,25 @@ export default function ProfileScreen() {
           <TouchableOpacity
             onPress={logout}
             activeOpacity={0.85}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 9,
-              backgroundColor: C.dangerBg,
-              borderRadius: 999,
-              minHeight: 54,
-            }}
+            className="flex-row items-center justify-center gap-[9px] bg-[#fee7ea] rounded-[999px] min-h-[54px]"
           >
             <Feather name="log-out" size={17} color={C.dangerInk} />
-            <Text className="font-sans-semibold" style={{ fontSize: 14.5, color: C.dangerInk }}>
+            <Text className="font-sans-semibold text-[14.5px] text-[#b0233f]">
               Log out
             </Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
+      </ScreenScrollView>
 
       {/* ── STICKY SAVE BAR (edit state) ─────────────────────── */}
       {isEditing && (
-        <View
-          style={{
-            position: 'absolute',
-            left: 16,
-            right: 16,
-            bottom: 24,
-            flexDirection: 'row',
-            gap: 10,
-          }}
-        >
+        <StickyFooter className="px-[12px] std:px-[16px] flex-row gap-[10px]">
           <TouchableOpacity
             onPress={handleCancelEdit}
             activeOpacity={0.85}
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: C.card,
-              borderRadius: 999,
-              minHeight: 56,
-              shadowColor: '#151233',
-              shadowOpacity: 0.1,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 4,
-            }}
+            className="flex-1 items-center justify-center bg-[#ffffff] rounded-[999px] min-h-[56px]" style={sx.shadow1}
           >
-            <Text className="font-sans-semibold" style={{ fontSize: 14.5, color: C.sub }}>
+            <Text className="font-sans-semibold text-[14.5px] text-[#6d6a96]">
               Cancel
             </Text>
           </TouchableOpacity>
@@ -759,21 +562,7 @@ export default function ProfileScreen() {
             onPress={handleSave}
             disabled={isSaving || !nameValid}
             activeOpacity={0.85}
-            style={{
-              flex: 2,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              backgroundColor: nameValid ? C.violet : C.violetDim,
-              borderRadius: 999,
-              minHeight: 56,
-              shadowColor: '#151233',
-              shadowOpacity: 0.12,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 4,
-            }}
+            className={`flex-[2] flex-row items-center justify-center gap-[8px] rounded-[999px] min-h-[56px] ${nameValid ? 'bg-[#6c5ce7]' : 'bg-[#d8d5f0]'}`} style={sx.shadow2}
           >
             {isSaving ? (
               <ActivityIndicator color="#ffffff" size="small" />
@@ -781,16 +570,21 @@ export default function ProfileScreen() {
               <>
                 <Feather name="check" size={16} color={nameValid ? '#ffffff' : C.muted} />
                 <Text
-                  className="font-sans-semibold"
-                  style={{ fontSize: 14.5, color: nameValid ? '#ffffff' : C.muted }}
+                  className={`font-sans-semibold text-[14.5px] ${nameValid ? 'text-[#ffffff]' : 'text-[#9d9ac0]'}`}
                 >
                   Save changes
                 </Text>
               </>
             )}
           </TouchableOpacity>
-        </View>
+        </StickyFooter>
       )}
-    </View>
+    </Screen>
   );
 }
+
+const sx = StyleSheet.create({
+  card: { shadowColor: '#151233', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  shadow1: { shadowColor: '#151233', shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
+  shadow2: { shadowColor: '#151233', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
+});

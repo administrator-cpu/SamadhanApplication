@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Sharing from 'expo-sharing';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Text, TouchableOpacity, View } from 'react-native';
 import {
   GestureHandlerRootView,
@@ -13,7 +13,7 @@ import {
   State,
   TapGestureHandler,
 } from 'react-native-gesture-handler';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TopInset } from './layout/Screen';
 
 function getAttachmentFileName(url) {
   if (!url) return 'Attachment';
@@ -42,6 +42,10 @@ function ZoomableImage({ uri, onSingleTap }) {
   const lastOffset = useRef({ x: 0, y: 0 });
 
   const [isZoomed, setIsZoomed] = useState(false);
+  const transformStyle = useMemo(
+    () => ({ transform: [{ translateX }, { translateY }, { scale }] }),
+    [translateX, translateY, scale],
+  );
 
   const resetTransform = () => {
     lastScale.current = 1;
@@ -128,7 +132,7 @@ function ZoomableImage({ uri, onSingleTap }) {
                       source={{ uri }}
                       resizeMode="contain"
                       className="w-full h-full"
-                      style={{ transform: [{ translateX }, { translateY }, { scale }] }}
+                      style={transformStyle}
                     />
                   </Animated.View>
                 </PinchGestureHandler>
@@ -142,7 +146,6 @@ function ZoomableImage({ uri, onSingleTap }) {
 }
 
 export function LightboxContent({ url, onClose }) {
-  const insets = useSafeAreaInsets();
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionState, setActionState] = useState(null);
@@ -207,9 +210,9 @@ export function LightboxContent({ url, onClose }) {
           <View className="absolute top-0 left-0 right-0 z-20" pointerEvents="box-none">
             <LinearGradient
               colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0)']}
-              style={{ paddingTop: insets.top + 10, paddingBottom: 28, paddingHorizontal: 16 }}
+              className="pb-[28px] px-[12px] std:px-[16px]"
             >
-              <View className="flex-row items-center justify-between">
+              <TopInset extra={10} className="flex-row items-center justify-between">
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={onClose}
@@ -246,7 +249,7 @@ export function LightboxContent({ url, onClose }) {
                     <Feather name="download" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
-              </View>
+              </TopInset>
             </LinearGradient>
           </View>
         ) : null}

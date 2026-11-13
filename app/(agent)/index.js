@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import {
   Platform,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Screen from '../../src/components/layout/Screen';
 import { useAuthStore } from '../../src/store/authStore';
 import { useAgentStats } from '../../src/hooks/useAgentStats';
 import TicketCard, { C } from '../../src/components/TicketCard';
@@ -56,7 +55,6 @@ function dutyLine() {
 
 export default function AgentDashboard() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
   const { data: stats, isLoading, isError, error, refetch, isRefetching } = useAgentStats();
 
@@ -76,6 +74,16 @@ export default function AgentDashboard() {
     return { fresh, inProgress, escalated: escalatedCount };
   }, [recentTickets, activeCount, escalatedCount]);
 
+  // Proportional segment widths are data-driven, so they stay as flex values.
+  const segFlex = useMemo(
+    () => ({
+      fresh: [styles.barSeg, styles.segMint, { flex: split.fresh || 0.001 }],
+      inProgress: [styles.barSeg, styles.segViolet, { flex: split.inProgress || 0.001 }],
+      escalated: [styles.barSeg, styles.segCoral, { flex: split.escalated || 0.001 }],
+    }),
+    [split],
+  );
+
   if (isLoading) return <LoadingState label="Loading workspace…" />;
 
   if (isError) {
@@ -89,17 +97,17 @@ export default function AgentDashboard() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 10 }]}
-      showsVerticalScrollIndicator={false}
+    <Screen
+      scroll
+      className="bg-[#F3F2FD]"
+      contentContainerClassName="pt-[10px]"
       refreshControl={
         <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.violet} />
       }
     >
       {/* Header */}
       <View style={styles.hero}>
-        <View style={{ flex: 1 }}>
+        <View className="flex-1">
           <Text style={styles.eyebrow}>On duty · {dutyLine()}</Text>
           <Text style={styles.name}>
             {user?.name?.split(' ')[0] || 'Agent'}’s queue
@@ -119,7 +127,7 @@ export default function AgentDashboard() {
         onPress={() => router.push('/(agent)/tickets')}
       >
         <View style={styles.workloadTop}>
-          <View style={{ flex: 1 }}>
+          <View className="flex-1">
             <Text style={styles.workloadLabel}>Assigned to you</Text>
             <View style={styles.workloadNumLine}>
               <Text style={styles.workloadNum}>{activeCount}</Text>
@@ -132,26 +140,22 @@ export default function AgentDashboard() {
         </View>
 
         <View style={styles.bar}>
-          <View style={[styles.barSeg, { flex: split.fresh || 0.001, backgroundColor: C.mintSpine }]} />
-          <View
-            style={[styles.barSeg, { flex: split.inProgress || 0.001, backgroundColor: C.violetLight }]}
-          />
-          <View
-            style={[styles.barSeg, { flex: split.escalated || 0.001, backgroundColor: C.coralSpine }]}
-          />
+          <View style={segFlex.fresh} />
+          <View style={segFlex.inProgress} />
+          <View style={segFlex.escalated} />
         </View>
 
         <View style={styles.legend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: C.mintSpine }]} />
+            <View style={[styles.legendDot, styles.segMint]} />
             <Text style={styles.legendText}>{split.fresh} new</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: C.violetLight }]} />
+            <View style={[styles.legendDot, styles.segViolet]} />
             <Text style={styles.legendText}>{split.inProgress} in progress</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: C.coralSpine }]} />
+            <View style={[styles.legendDot, styles.segCoral]} />
             <Text style={styles.legendText}>{split.escalated} escalated</Text>
           </View>
         </View>
@@ -170,21 +174,21 @@ export default function AgentDashboard() {
               size={14}
               color={escalatedCount === 0 ? C.inkFaint : onCoral}
             />
-            <Text style={[styles.alarmLabel, escalatedCount === 0 && { color: C.inkFaint }]}>
+            <Text style={[styles.alarmLabel, escalatedCount === 0 && styles.alarmLabelQuiet]}>
               Escalated
             </Text>
           </View>
           <View style={styles.alarmNumLine}>
-            <Text style={[styles.alarmNum, escalatedCount === 0 && { color: C.ink }]}>
+            <Text style={[styles.alarmNum, escalatedCount === 0 && styles.alarmNumQuiet]}>
               {escalatedCount}
             </Text>
-            <Text style={[styles.alarmUnit, escalatedCount === 0 && { color: C.inkMuted }]}>
+            <Text style={[styles.alarmUnit, escalatedCount === 0 && styles.alarmUnitQuiet]}>
               {escalatedCount === 0 ? 'all clear' : 'need you now'}
             </Text>
           </View>
         </TouchableOpacity>
 
-        <View style={[styles.tile, { backgroundColor: C.mint, flex: 1 }]}>
+        <View style={[styles.tile, styles.resolvedTile]}>
           <Text style={styles.resolvedNum}>{resolvedCount}</Text>
           <Text style={styles.resolvedLabel}>Resolved</Text>
           <Text style={styles.resolvedFoot}>All time</Text>
@@ -225,7 +229,7 @@ export default function AgentDashboard() {
           ))
         )}
       </View>
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -236,8 +240,6 @@ const shadow = (color, opacity, radius, y, elevation) =>
   });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  content: { paddingBottom: 36 },
 
   hero: {
     flexDirection: 'row',
@@ -296,6 +298,9 @@ const styles = StyleSheet.create({
   },
   bar: { flexDirection: 'row', gap: 4, marginTop: 18 },
   barSeg: { height: 6, borderRadius: 3 },
+  segMint: { backgroundColor: C.mintSpine },
+  segViolet: { backgroundColor: C.violetLight },
+  segCoral: { backgroundColor: C.coralSpine },
   legend: { flexDirection: 'row', gap: 14, marginTop: 11, flexWrap: 'wrap' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 7, height: 7, borderRadius: 4 },
@@ -317,6 +322,10 @@ const styles = StyleSheet.create({
   alarmNumLine: { flexDirection: 'row', alignItems: 'baseline', gap: 7, marginTop: 9 },
   alarmNum: { fontSize: 30, fontWeight: '800', letterSpacing: -1.2, color: '#FFFFFF' },
   alarmUnit: { fontSize: 12, fontWeight: '600', color: onCoral, flexShrink: 1 },
+  alarmLabelQuiet: { color: C.inkFaint },
+  alarmNumQuiet: { color: C.ink },
+  alarmUnitQuiet: { color: C.inkMuted },
+  resolvedTile: { backgroundColor: C.mint, flex: 1 },
   resolvedNum: { fontSize: 30, fontWeight: '800', letterSpacing: -1.2, color: C.mintInk },
   resolvedLabel: { fontSize: 11.5, fontWeight: '600', color: C.mintInk2, marginTop: 5 },
   resolvedFoot: { fontSize: 11, fontWeight: '600', color: C.mintSpine, marginTop: 7 },

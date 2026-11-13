@@ -1,8 +1,8 @@
 // src/components/TicketStaffTools.js
 import { Feather } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Sheet from './layout/Sheet';
 import { useAuthStore } from '../store/authStore';
 import TicketOutageForm from './TicketOutageForm';
 import TicketRCAForm from './TicketRCAForm';
@@ -20,7 +20,6 @@ const TABS = [
 export default function TicketStaffTools({ ticket }) {
   const user = useAuthStore((state) => state.user);
   const isStaff = STAFF_ROLES.includes(user?.role);
-  const insets = useSafeAreaInsets();
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('reassign');
 
@@ -37,17 +36,21 @@ export default function TicketStaffTools({ ticket }) {
         <View style={styles.triggerChip}>
           <Feather name="tool" size={17} color={T.blue} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View className="flex-1">
           <Text style={styles.triggerLabel}>Staff tools</Text>
           <Text style={styles.triggerNote}>Assign, log an outage{isResolvedOrClosed ? ', write the root cause' : ''}</Text>
         </View>
         <Feather name="chevron-right" size={18} color="#C3CDDB" />
       </Pressable>
 
-      <Modal visible={modalOpen} animationType="slide" onRequestClose={() => setModalOpen(false)}>
-        <View style={[styles.modal, { paddingTop: insets.top + 10 }]}>
+      <Sheet
+        visible={modalOpen}
+        onClose={() => setModalOpen(false)}
+        variant="full"
+        className="bg-[#FFFFFF] pt-[10px]"
+      >
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
+            <View className="flex-1">
               <Text style={styles.title}>Staff tools</Text>
               <Text style={styles.subtitle}>Ticket #{ticket.ticket_no}</Text>
             </View>
@@ -81,8 +84,7 @@ export default function TicketStaffTools({ ticket }) {
             {activeTab === 'outage' ? <TicketOutageForm ticket={ticket} onDone={() => setModalOpen(false)} /> : null}
             {activeTab === 'reassign' ? <TicketReassignForm ticket={ticket} onDone={() => setModalOpen(false)} /> : null}
           </View>
-        </View>
-      </Modal>
+      </Sheet>
     </>
   );
 }
@@ -103,7 +105,6 @@ const styles = StyleSheet.create({
   triggerLabel: { fontSize: 14.5, fontWeight: '600', color: T.ink },
   triggerNote: { fontSize: 11.5, color: T.muted, marginTop: 2 },
 
-  modal: { flex: 1, backgroundColor: T.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',

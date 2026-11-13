@@ -32,7 +32,7 @@ export default function TicketReassignForm({ ticket, onDone }) {
   const list = agents || [];
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 34 }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-[34px]">
       {error ? (
         <Text style={styles.error}>{error.message || 'That reassignment did not go through.'}</Text>
       ) : null}
@@ -49,7 +49,7 @@ export default function TicketReassignForm({ ticket, onDone }) {
       {list.length === 0 ? (
         <Text style={styles.empty}>No agents available to assign right now.</Text>
       ) : (
-        <View style={{ marginTop: 16, gap: 8 }}>
+        <View className="mt-[16px] gap-[8px]">
           {list.map((agent, index) => {
             const agentId = agent.id ?? agent.employee_row_id;
             const isCurrent =
@@ -61,14 +61,14 @@ export default function TicketReassignForm({ ticket, onDone }) {
                 disabled={isPending || isCurrent}
                 style={[styles.row, isCurrent && styles.rowCurrent, isPending && !isCurrent && styles.rowBusy]}
               >
-                <View style={[styles.avatar, isCurrent && { backgroundColor: '#FFFFFF' }]}>
-                  <Text style={[styles.avatarText, isCurrent && { color: T.greenInk }]}>
+                <View className={isCurrent ? 'bg-[#FFFFFF]' : 'bg-[#EAF2FE]'} style={styles.avatar}>
+                  <Text className={isCurrent ? 'text-[#1E6B50]' : 'text-[#1B5FC0]'} style={styles.avatarText}>
                     {agent.name?.[0]?.toUpperCase() || '?'}
                   </Text>
                 </View>
-                <View style={{ flex: 1 }}>
+                <View className="flex-1">
                   <Text style={styles.name}>{agent.name}</Text>
-                  <Text style={[styles.role, isCurrent && { color: T.greenInk }]}>
+                  <Text className={isCurrent ? 'text-[#1E6B50]' : 'text-[#5C7291]'} style={styles.role}>
                     {isCurrent ? 'Handling this ticket' : agent.role || 'Support agent'}
                   </Text>
                 </View>
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   },
   rowCurrent: { backgroundColor: T.greenTint },
   rowBusy: { opacity: 0.5 },
-  avatar: { width: 40, height: 40, borderRadius: 999, backgroundColor: T.blueTint, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 15, fontWeight: '700', color: T.blueInk },
+  avatar: { width: 40, height: 40, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 15, fontWeight: '700' },
   name: { fontSize: 14.5, fontWeight: '600', color: T.ink },
-  role: { fontSize: 11.5, color: T.muted, marginTop: 2 },
+  role: { fontSize: 11.5, marginTop: 2 },
 });

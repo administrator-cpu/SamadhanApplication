@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomInset, TopInset } from './layout/Screen';
 
 // Adjust if your asset lives elsewhere.
 const ICON = require('../../assets/icon.png');
@@ -26,7 +26,6 @@ const C = {
 };
 
 export default function InitializingScreen() {
-  const insets = useSafeAreaInsets();
   const [loadingStep, setLoadingStep] = useState(0);
 
   const iconScale = useRef(new Animated.Value(0.62)).current;
@@ -148,161 +147,92 @@ export default function InitializingScreen() {
     };
   }, []);
 
-  const ringStyle = (value) => ({
-    transform: [
-      { scale: value.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.85] }) },
-    ],
-    opacity: value.interpolate({
-      inputRange: [0, 0.18, 1],
-      outputRange: [0, 0.5, 0],
+  // Animated values are stable refs, so the animated styles are built once.
+  const anim = useMemo(
+    () => ({
+      glow: {
+        opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
+        transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
+      },
+      rings: [ripple1, ripple2, ripple3].map((value) => ({
+        transform: [{ scale: value.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.85] }) }],
+        opacity: value.interpolate({ inputRange: [0, 0.18, 1], outputRange: [0, 0.5, 0] }),
+      })),
+      icon: { opacity: iconOpacity, transform: [{ scale: iconScale }, { translateY: iconLift }] },
+      wipe: { width: wipe.interpolate({ inputRange: [0, 1], outputRange: [0, WORDMARK_WIDTH] }) },
+      rule: { transform: [{ scaleX: rules }] },
+      tagline: {
+        opacity: tagline,
+        transform: [{ translateY: tagline.interpolate({ inputRange: [0, 1], outputRange: [5, 0] }) }],
+      },
+      status: { opacity: statusPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) },
     }),
-  });
+    [glow, ripple1, ripple2, ripple3, iconOpacity, iconScale, iconLift, wipe, rules, tagline, statusPulse],
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.ground }}>
+    <View className="flex-1 bg-[#FFFFFF]">
       <StatusBar style="dark" />
 
-      <View style={{ paddingTop: insets.top + 40 }} />
+      <TopInset extra={40} />
 
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+      <View className="flex-1 items-center justify-center w-full">
         {/* Warm bloom behind the mark */}
         <Animated.View
-          style={{
-            position: 'absolute',
-            width: 240,
-            height: 240,
-            borderRadius: 999,
-            backgroundColor: 'rgba(245,112,30,0.10)',
-            opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-            transform: [
-              { scale: glow.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
-            ],
-          }}
+          className="absolute w-[240px] h-[240px] rounded-[999px] bg-[rgba(245,112,30,0.10)]"
+          style={anim.glow}
         />
 
         {/* Signal rings */}
-        {[ripple1, ripple2, ripple3].map((value, i) => (
+        {anim.rings.map((ring, i) => (
           <Animated.View
             key={`ring-${i}`}
-            style={[
-              {
-                position: 'absolute',
-                width: 168,
-                height: 168,
-                borderRadius: 999,
-                borderWidth: 1.5,
-                borderColor: C.orange,
-              },
-              ringStyle(value),
-            ]}
+            className="absolute w-[168px] h-[168px] rounded-[999px] border-[1.5px] border-[#F5701E]"
+            style={ring}
           />
         ))}
 
         {/* The mark */}
-        <Animated.View
-          style={{
-            opacity: iconOpacity,
-            transform: [{ scale: iconScale }, { translateY: iconLift }],
-          }}
-        >
-          <Image source={ICON} style={{ width: 108, height: 108 }} className='rounded-lg' resizeMode="contain" />
+        <Animated.View style={anim.icon}>
+          <Image source={ICON} className='rounded-lg w-[108px] h-[108px]' resizeMode="contain" />
         </Animated.View>
 
-        <Animated.View
-          style={{
-            overflow: 'hidden',
-            marginTop: 6,
-            width: wipe.interpolate({ inputRange: [0, 1], outputRange: [0, WORDMARK_WIDTH] }),
-          }}
-        >
+        <Animated.View className="overflow-hidden mt-[6px]" style={anim.wipe}>
           <Text
             numberOfLines={1}
-            style={{
-              width: WORDMARK_WIDTH,
-              fontSize: 31,
-              lineHeight: 40,
-              letterSpacing: 3,
-              fontWeight: '800',
-              color: C.wordmark,
-            }}
-            className='text-center'
+            className='text-center w-[232px] text-[31px] leading-[40px] tracking-[3px] font-extrabold text-[#F26722]'
           >
             {WORDMARK}
           </Text>
         </Animated.View>
 
         {/* Tagline with drawing rules */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14 }}>
-          <Animated.View
-            style={{
-              width: 26,
-              height: 2,
-              borderRadius: 999,
-              backgroundColor: C.orange,
-              transform: [{ scaleX: rules }],
-            }}
-          />
+        <View className="flex-row items-center mt-[14px]">
+          <Animated.View className="w-[26px] h-[2px] rounded-[999px] bg-[#F5701E]" style={anim.rule} />
           <Animated.Text
-            style={{
-              marginHorizontal: 12,
-              fontSize: 9.5,
-              letterSpacing: 1.8,
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              color: C.tagline,
-              opacity: tagline,
-              transform: [
-                { translateY: tagline.interpolate({ inputRange: [0, 1], outputRange: [5, 0] }) },
-              ],
-            }}
+            className="mx-[12px] text-[9.5px] tracking-[1.8px] font-semibold uppercase text-[#6F6A66]"
+            style={anim.tagline}
           >
             AI powered support solution
           </Animated.Text>
-          <Animated.View
-            style={{
-              width: 26,
-              height: 2,
-              borderRadius: 999,
-              backgroundColor: C.orangeDeep,
-              transform: [{ scaleX: rules }],
-            }}
-          />
+          <Animated.View className="w-[26px] h-[2px] rounded-[999px] bg-[#E6452B]" style={anim.rule} />
         </View>
       </View>
 
       {/* Status line */}
-      <View
-        style={{
-          paddingBottom: insets.bottom + 40,
-          paddingHorizontal: 32,
-          alignItems: 'center',
-          width: '100%',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <BottomInset extra={40} className="px-[32px] items-center w-full">
+        <View className="flex-row items-center">
           <Animated.View
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: 999,
-              backgroundColor: C.orange,
-              marginRight: 10,
-              opacity: statusPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
-            }}
+            className="w-[7px] h-[7px] rounded-[999px] bg-[#F5701E] mr-[10px]"
+            style={anim.status}
           />
           <Text
-            style={{
-              fontSize: 10.5,
-              letterSpacing: 1.6,
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              color: C.status,
-            }}
+            className="text-[10.5px] tracking-[1.6px] font-semibold uppercase text-[#3D2B20]"
           >
             {LOADING_STATES[loadingStep]}
           </Text>
         </View>
-      </View>
+      </BottomInset>
     </View>
   );
 }

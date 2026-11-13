@@ -2,7 +2,8 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Screen, { ScreenFlatList } from '../../src/components/layout/Screen';
 import { useMyConnections } from '../../src/hooks/useCustomers';
 
 /* ── palette (matches design 8b) ───────────────────────────── */
@@ -22,19 +23,8 @@ const C = {
   idleBg: '#f0eefc',
 };
 
-const CARD = {
-  backgroundColor: C.card,
-  borderRadius: 24,
-  padding: 16,
-  shadowColor: '#151233',
-  shadowOpacity: 0.06,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 2,
-  
-};
+const CARD_CLASS = 'bg-[#ffffff] rounded-[24px] p-[12px] std:p-[16px]';
 
-const MONO = 'ui-monospace';
 
 function formatBandwidth(bandwidth) {
   const n = Number(bandwidth);
@@ -72,9 +62,9 @@ export default function MyConnections() {
 
   if (isLoading && !refreshing) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <View className="flex-1 bg-[#f3f2fd] items-center justify-center">
         <ActivityIndicator size="large" color={C.ink} />
-        <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.sub, marginTop: 14 }}>
+        <Text className="font-sans-semibold text-[13px] text-[#6d6a96] mt-[14px]">
           Fetching connections...
         </Text>
       </View>
@@ -92,89 +82,56 @@ export default function MyConnections() {
         onPress={() =>
           router.push(`/(customer)/raise-ticket?circuitId=${encodeURIComponent(item.fabCircuitId)}`)
         }
-        style={({ pressed }) => [CARD, { gap: 13, opacity: pressed ? 0.9 : 1 }]}
-        className=" p-3 px-[16px] bg-[#fff] rounded-xl"
+        style={styles.card}
+        className={`${CARD_CLASS} gap-[13px] active:opacity-90`}
       >
         {/* circuit id + state */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} className="pb-2">
+        <View className="pb-2 flex-row items-center gap-[10px]">
           <View
-            style={{
-              width: 9,
-              height: 9,
-              borderRadius: 5,
-              backgroundColor: isActive ? C.mint : C.idle,
-            }}
+            className={`w-[9px] h-[9px] rounded-[5px] ${isActive ? 'bg-[#12b886]' : 'bg-[#c3c0e2]'}`}
           />
           <Text
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontFamily: MONO,
-              fontWeight: '700',
-              fontSize: 14.5,
-              letterSpacing: -0.3,
-              color: C.ink,
-            }}
+            className="flex-1 min-w-0 font-[ui-monospace] font-bold text-[14.5px] tracking-[-0.3px] text-[#151233]"
             
             numberOfLines={1}
           >
             {item.fabCircuitId}
           </Text>
           <Text
-            className="font-sans-semibold"
-            style={{
-              fontSize: 10,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              backgroundColor: isActive ? C.mintBg : C.idleBg,
-              borderRadius: 999,
-              paddingHorizontal: 9,
-              paddingVertical: 5,
-              overflow: 'hidden',
-              color: isActive ? C.mintInk : C.sub,
-            }}
+            className={`font-sans-semibold text-[10px] tracking-[1px] uppercase rounded-[999px] px-[9px] py-[5px] overflow-hidden ${isActive ? 'bg-[#ccf7e4] text-[#0f7a56]' : 'bg-[#f0eefc] text-[#6d6a96]'}`}
           >
             {isActive ? 'Active' : item.status || 'Inactive'}
           </Text>
         </View>
 
         {/* bandwidth · site · ticket */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14 }}>
+        <View className="flex-row items-end gap-[14px]">
           <View>
             <Text
-              className="font-sans-medium"
-              style={{ fontSize: 9.5, letterSpacing: 0.9, textTransform: 'uppercase', color: C.muted }}
+              className="font-sans-medium text-[9.5px] tracking-[0.9px] uppercase text-[#9d9ac0]"
             >
               Bandwidth
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, marginTop: 3 }}>
+            <View className="flex-row items-end gap-[3px] mt-[3px]">
               <Text
-                className="font-sans-semibold"
-                style={{ fontSize: 20, letterSpacing: -0.6, lineHeight: 22, color: C.ink }}
+                className="font-sans-semibold text-[20px] tracking-[-0.6px] leading-[22px] text-[#151233]"
               >
                 {fig}
               </Text>
-              <Text className="font-sans-semibold" style={{ fontSize: 10.5, color: C.sub, lineHeight: 15 }}>
+              <Text className="font-sans-semibold text-[10.5px] text-[#6d6a96] leading-[15px]">
                 {unit}
               </Text>
             </View>
           </View>
 
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View className="flex-1 min-w-0">
             <Text
-              className="font-sans-medium"
-              style={{ fontSize: 9.5, letterSpacing: 0.9, textTransform: 'uppercase', color: C.muted }}
+              className="font-sans-medium text-[9.5px] tracking-[0.9px] uppercase text-[#9d9ac0]"
             >
               Site
             </Text>
             <Text
-              style={{
-                fontFamily: MONO,
-                fontWeight: '600',
-                fontSize: 12.5,
-                color: C.inkSoft,
-                marginTop: 4,
-              }}
+              className="font-[ui-monospace] font-semibold text-[12.5px] text-[#3a3670] mt-[4px]"
               numberOfLines={1}
             >
               {site}
@@ -182,18 +139,10 @@ export default function MyConnections() {
           </View>
 
           <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              backgroundColor: C.ink,
-              borderRadius: 999,
-              paddingHorizontal: 13,
-              paddingVertical: 9,
-            }}
+            className="flex-row items-center gap-[6px] bg-[#151233] rounded-[999px] px-[13px] py-[9px]"
           >
             <Feather name="plus" size={12} color={C.bg} />
-            <Text className="font-sans-semibold" style={{ fontSize: 11.5, color: C.bg }}>
+            <Text className="font-sans-semibold text-[11.5px] text-[#f3f2fd]">
               Ticket
             </Text>
           </View>
@@ -203,44 +152,41 @@ export default function MyConnections() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <Screen className="bg-[#f3f2fd]">
       {/* Header */}
-      <View style={{ paddingTop: 48, paddingBottom: 18, paddingHorizontal: 20 }}>
+      <View className="pt-[16px] pb-[18px] px-[16px] std:px-[20px]">
         <Text
-          className="font-sans-semibold"
-          style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.violetDeep }}
+          className="font-sans-semibold text-[10.5px] tracking-[1.4px] uppercase text-[#4a34c7]"
         >
           Your network
         </Text>
-        <Text className="font-sans-semibold" style={{ fontSize: 31, color: C.ink, marginTop: 3 }}>
+        <Text className="font-sans-semibold text-[31px] text-[#151233] mt-[3px]">
           Connections
         </Text>
-        <Text className="font-sans" style={{ fontSize: 13, color: C.sub, marginTop: 5 }}>
+        <Text className="font-sans text-[13px] text-[#6d6a96] mt-[5px]">
           {connections.length
             ? `${connections.length} ${connections.length === 1 ? 'service' : 'services'} · ${activeCount} active · tap one to raise a ticket`
             : 'Select a service to raise a support ticket'}
         </Text>
       </View>
 
-      <FlatList
+      <ScreenFlatList
         data={groups}
         keyExtractor={(group, index) => String(group?.type ?? index)}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160, gap: 16 }}
-        showsVerticalScrollIndicator={false}
+        contentContainerClassName="px-[12px] std:px-[16px] gap-[16px]"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6c5ce7" />
         }
         renderItem={({ item: group }) => (
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, paddingLeft: 4 }}>
+          <View className="gap-[10px]">
+            <View className="flex-row items-center gap-[9px] pl-[4px]">
               <Text
-                className="font-sans-semibold"
-                style={{ fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: C.ink }}
+                className="font-sans-semibold text-[12px] tracking-[1.2px] uppercase text-[#151233]"
               >
                 {group.type}
               </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: C.rule }} />
-              <Text className="font-sans-medium" style={{ fontSize: 11, color: C.muted }}>
+              <View className="flex-1 h-[1px] bg-[#e3e0f5]" />
+              <Text className="font-sans-medium text-[11px] text-[#9d9ac0]">
                 {group.items.length} {group.items.length === 1 ? 'link' : 'links'}
               </Text>
             </View>
@@ -248,17 +194,9 @@ export default function MyConnections() {
           </View>
         )}
         ListEmptyComponent={
-          <View style={{ ...CARD, paddingVertical: 34, paddingHorizontal: 24, alignItems: 'center' }}>
+          <View className={`${CARD_CLASS} py-[34px] px-[24px] items-center`} style={styles.card}>
             <View
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: 38,
-                backgroundColor: C.bg,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 16,
-              }}
+              className="w-[76px] h-[76px] rounded-[38px] bg-[#f3f2fd] items-center justify-center mb-[16px]"
             >
               <MaterialCommunityIcons
                 name={isError ? 'alert-circle-outline' : 'lan-disconnect'}
@@ -266,12 +204,11 @@ export default function MyConnections() {
                 color={C.muted}
               />
             </View>
-            <Text className="font-sans-semibold" style={{ fontSize: 18, color: C.ink, marginBottom: 6 }}>
+            <Text className="font-sans-semibold text-[18px] text-[#151233] mb-[6px]">
               {isError ? 'Unable to connect' : 'No connections found'}
             </Text>
             <Text
-              className="font-sans"
-              style={{ fontSize: 12.5, lineHeight: 19, color: C.sub, textAlign: 'center' }}
+              className="font-sans text-[12.5px] leading-[19px] text-[#6d6a96] text-center"
             >
               {isError
                 ? 'Please pull down to refresh the list.'
@@ -280,6 +217,16 @@ export default function MyConnections() {
           </View>
         }
       />
-    </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    shadowColor: '#151233',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+});

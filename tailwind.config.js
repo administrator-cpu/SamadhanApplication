@@ -9,6 +9,11 @@ module.exports = {
  presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      // Phones only. Base classes target small phones (≤360dp);
+      // `std:` applies from 361dp (standard / large phones).
+      screens: {
+        std: '361px',
+      },
       colors: {
   // Background & Surface — stark, high-contrast, not clinical
   bg: {

@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Screen from '../../src/components/layout/Screen';
 import { useAuthStore } from '../../src/store/authStore';
 import { useTickets } from '../../src/hooks/useTickets';
 import { statusLabel } from '../../src/utils/ticketStatus';
@@ -52,16 +52,21 @@ const C = {
 };
 
 const STATUS_META = {
-  OPEN: { tint: C.mint, ink: C.mintInk2, spine: C.mintSpine },
-  IN_PROGRESS: { tint: C.violetTint, ink: C.violetInk, spine: C.violet },
-  ESCALATED: { tint: C.coral, ink: '#FFFFFF', spine: C.coralSpine },
-  REOPENED: { tint: C.marigold, ink: C.marigoldInk, spine: C.marigold },
-  RESOLVED: { tint: C.mint, ink: C.mintInk2, spine: C.mintSpine },
-  CLOSED: { tint: C.violetTint, ink: '#4A4776', spine: C.violet },
+  OPEN: { tint: 'bg-[#CCF7E4]', ink: 'text-[#0F7A56]', spine: 'bg-[#12B886]' },
+  IN_PROGRESS: { tint: 'bg-[#EBE8FF]', ink: 'text-[#4A34C7]', spine: 'bg-[#6C5CE7]' },
+  ESCALATED: { tint: 'bg-[#C2410C]', ink: 'text-[#FFFFFF]', spine: 'bg-[#FF8A3D]' },
+  REOPENED: { tint: 'bg-[#FFD166]', ink: 'text-[#6B4800]', spine: 'bg-[#FFD166]' },
+  RESOLVED: { tint: 'bg-[#CCF7E4]', ink: 'text-[#0F7A56]', spine: 'bg-[#12B886]' },
+  CLOSED: { tint: 'bg-[#EBE8FF]', ink: 'text-[#4A4776]', spine: 'bg-[#6C5CE7]' },
 };
 
-const AVATAR_BG = [C.violetTintWarm, C.mint, C.marigold];
-const AVATAR_INK = [C.violetInk, C.mintInk, C.marigoldInk];
+const AVATAR_BG = ['bg-[#E6E1FF]', 'bg-[#CCF7E4]', 'bg-[#FFD166]'];
+const AVATAR_INK = ['text-[#4A34C7]', 'text-[#0D6B4B]', 'text-[#6B4800]'];
+const AVATAR_SIZE = {
+  xs: { box: 'w-[25px] h-[25px] rounded-[13px]', text: 'text-[10px]' },
+  sm: { box: 'w-[36px] h-[36px] rounded-[12px]', text: 'text-[12px]' },
+  md: { box: 'w-[38px] h-[38px] rounded-[13px]', text: 'text-[12.5px]' },
+};
 
 const ATTENTION = ['ESCALATED', 'REOPENED', 'OPEN', 'IN_PROGRESS'];
 
@@ -85,16 +90,12 @@ function getGreeting() {
   return 'Good evening';
 }
 
-function Avatar({ name, size = 38, radius = 13, fontSize = 12.5 }) {
+function Avatar({ name, size = 'md' }) {
   const i = avatarIndex(name || '');
+  const dims = AVATAR_SIZE[size];
   return (
-    <View
-      style={[
-        styles.avatar,
-        { width: size, height: size, borderRadius: radius, backgroundColor: AVATAR_BG[i] },
-      ]}
-    >
-      <Text style={{ fontSize, fontWeight: '700', color: AVATAR_INK[i] }}>
+    <View className={`${dims.box} ${AVATAR_BG[i]}`} style={styles.avatar}>
+      <Text maxFontSizeMultiplier={1.2} className={`font-bold ${dims.text} ${AVATAR_INK[i]}`}>
         {initialsOf(name)}
       </Text>
     </View>
@@ -103,7 +104,6 @@ function Avatar({ name, size = 38, radius = 13, fontSize = 12.5 }) {
 
 export default function SalesDashboard() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
 
   const { data, isLoading, refetch, isRefetching } = useTickets({});
@@ -128,6 +128,16 @@ export default function SalesDashboard() {
     const prog = activeTickets.filter((t) => t.status === 'IN_PROGRESS').length;
     return { open: open || 0, prog: prog || 0, esc: escalatedCount || 0 };
   }, [activeTickets, escalatedCount]);
+
+  // Proportional segment widths are data-driven, so they stay as flex values.
+  const segFlex = useMemo(
+    () => ({
+      open: [styles.barSeg, styles.segMint, { flex: activeSplit.open || 1 }],
+      prog: [styles.barSeg, styles.segViolet, { flex: activeSplit.prog || 1 }],
+      esc: [styles.barSeg, styles.segCoral, { flex: activeSplit.esc || 1 }],
+    }),
+    [activeSplit],
+  );
 
   // Recent customers — unique, newest first, for the one-tap raise path.
   const recentCustomers = useMemo(() => {
@@ -171,17 +181,17 @@ export default function SalesDashboard() {
     });
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 10 }]}
-      showsVerticalScrollIndicator={false}
+    <Screen
+      scroll
+      className="bg-[#F3F2FD]"
+      contentContainerClassName="pt-[10px]"
       refreshControl={
         <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={C.violet} />
       }
     >
       {/* Hero */}
       <View style={styles.hero}>
-        <View style={{ flex: 1 }}>
+        <View className="flex-1">
           <Text style={styles.greeting}>{getGreeting()}</Text>
           <Text style={styles.name}>{user?.name?.split(' ')[0] || 'there'}</Text>
         </View>
@@ -199,7 +209,7 @@ export default function SalesDashboard() {
           activeOpacity={0.85}
           onPress={() => goRaise(null)}
         >
-          <View style={{ flex: 1 }}>
+          <View className="flex-1">
             <Text style={styles.raiseTitle}>Raise a ticket{'\n'}on behalf of a customer</Text>
             <Text style={styles.raiseSubtitle}>
               Pick a customer, describe the fault, we route it.
@@ -217,7 +227,7 @@ export default function SalesDashboard() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 9 }}
+              contentContainerClassName="gap-[9px]"
             >
               {recentCustomers.slice(0, 3).map((c) => (
                 <TouchableOpacity
@@ -226,7 +236,7 @@ export default function SalesDashboard() {
                   activeOpacity={0.8}
                   onPress={() => goRaise(c)}
                 >
-                  <Avatar name={c.name} size={25} radius={13} fontSize={10} />
+                  <Avatar name={c.name} size="xs" />
                   <Text style={styles.quickPickText} numberOfLines={1}>
                     {c.name}
                   </Text>
@@ -257,21 +267,15 @@ export default function SalesDashboard() {
             <Text style={styles.bigNumOnDark}>{activeTickets.length}</Text>
             <Text style={styles.tileLabelOnDark}>Active now</Text>
             <View style={styles.bar}>
-              <View
-                style={[styles.barSeg, { flex: activeSplit.open || 1, backgroundColor: C.mintSpine }]}
-              />
-              <View
-                style={[styles.barSeg, { flex: activeSplit.prog || 1, backgroundColor: C.violetLight }]}
-              />
-              <View
-                style={[styles.barSeg, { flex: activeSplit.esc || 1, backgroundColor: C.coralSpine }]}
-              />
+              <View style={segFlex.open} />
+              <View style={segFlex.prog} />
+              <View style={segFlex.esc} />
             </View>
           </TouchableOpacity>
 
-          <View style={[styles.tile, { backgroundColor: C.mint }]}>
-            <Text style={[styles.bigNum, { color: C.mintInk }]}>{resolvedTickets.length}</Text>
-            <Text style={[styles.tileLabel, { color: C.mintInk2 }]}>Resolved</Text>
+          <View style={[styles.tile, styles.tileMint]}>
+            <Text style={[styles.bigNum, styles.bigNumMint]}>{resolvedTickets.length}</Text>
+            <Text style={[styles.tileLabel, styles.tileLabelMint]}>Resolved</Text>
             <Text style={styles.tileFoot}>All time</Text>
           </View>
         </View>
@@ -354,7 +358,7 @@ export default function SalesDashboard() {
                 activeOpacity={0.75}
                 onPress={() => router.push(`/(sales)/tickets/${ticket.id}`)}
               >
-                <View style={[styles.spine, { backgroundColor: meta.spine }]} />
+                <View className={meta.spine} style={styles.spine} />
                 <Avatar name={who} />
                 <View style={styles.rowBody}>
                   <View style={styles.rowTitleLine}>
@@ -367,8 +371,8 @@ export default function SalesDashboard() {
                     {ticket.circuit_description || ticket.title || 'No description'}
                   </Text>
                 </View>
-                <View style={[styles.badge, { backgroundColor: meta.tint }]}>
-                  <Text style={[styles.badgeText, { color: meta.ink }]}>
+                <View className={meta.tint} style={styles.badge}>
+                  <Text maxFontSizeMultiplier={1.2} className={meta.ink} style={styles.badgeText}>
                     {statusLabel(ticket.status)}
                   </Text>
                 </View>
@@ -393,7 +397,7 @@ export default function SalesDashboard() {
                 activeOpacity={0.75}
                 onPress={() => goRaise(customer)}
               >
-                <Avatar name={customer.name} size={36} radius={12} fontSize={12} />
+                <Avatar name={customer.name} size="sm" />
                 <View style={styles.rowBody}>
                   <Text style={styles.rowName} numberOfLines={1}>
                     {customer.name}
@@ -411,7 +415,7 @@ export default function SalesDashboard() {
           </View>
         </>
       )}
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -427,8 +431,6 @@ const shadow = (opacity, radius, y, color) =>
   });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  contentContainer: { paddingBottom: 110 },
 
   /* Hero */
   hero: {
@@ -532,6 +534,12 @@ const styles = StyleSheet.create({
   tileLabelOnDark: { fontSize: 12, fontWeight: '600', color: C.onDark, marginTop: 5 },
   tileFoot: { fontSize: 11.5, fontWeight: '600', color: C.mintSpine, marginTop: 11 },
   bar: { flexDirection: 'row', gap: 4, marginTop: 11 },
+  segMint: { backgroundColor: C.mintSpine },
+  segViolet: { backgroundColor: C.violetLight },
+  segCoral: { backgroundColor: C.coralSpine },
+  tileMint: { backgroundColor: C.mint },
+  bigNumMint: { color: C.mintInk },
+  tileLabelMint: { color: C.mintInk2 },
   barSeg: { height: 5, borderRadius: 3 },
   tileFlat: {
     flex: 1,

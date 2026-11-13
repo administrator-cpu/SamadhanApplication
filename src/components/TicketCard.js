@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { statusLabel } from '../utils/ticketStatus';
 import { useAuthStore } from '../store/authStore';
+import { DENSE_FONT_SCALE } from './layout/tokens';
 
 /* ---------------------------------------------------------------- */
 /* Design tokens — vivid palette.                                    */
@@ -36,15 +37,20 @@ export const C = {
 };
 
 const STATUS_META = {
-  OPEN: { tint: C.mint, ink: C.mintInk2, spine: C.mintSpine },
-  IN_PROGRESS: { tint: C.violetTintWarm, ink: C.violetInk, spine: C.violet },
-  ESCALATED: { tint: C.coral, ink: '#FFFFFF', spine: C.coralSpine },
-  RESOLVED: { tint: C.mint, ink: C.mintInk2, spine: C.mintSpine },
-  CLOSED: { tint: C.violetTint, ink: '#4A4776', spine: C.violet },
+  OPEN: { tint: 'bg-[#CCF7E4]', ink: 'text-[#0F7A56]' },
+  IN_PROGRESS: { tint: 'bg-[#E6E1FF]', ink: 'text-[#4A34C7]' },
+  ESCALATED: { tint: 'bg-[#C2410C]', ink: 'text-[#FFFFFF]' },
+  RESOLVED: { tint: 'bg-[#CCF7E4]', ink: 'text-[#0F7A56]' },
+  CLOSED: { tint: 'bg-[#EBE8FF]', ink: 'text-[#4A4776]' },
 };
 
 export const AVATAR_BG = [C.violetTintWarm, C.mint, C.marigold];
 export const AVATAR_INK = [C.violetInk, C.mintInk2, C.marigoldInk];
+// NativeWind class equivalents of AVATAR_BG / AVATAR_INK.
+export const AVATAR_BG_CLASS = ['bg-[#E6E1FF]', 'bg-[#CCF7E4]', 'bg-[#FFD166]'];
+export const AVATAR_INK_CLASS = ['text-[#4A34C7]', 'text-[#0F7A56]', 'text-[#6B4800]'];
+
+const STAGE_WIDTH = { 1: 'w-[25%]', 2: 'w-[50%]', 3: 'w-[75%]', 4: 'w-full' };
 
 const CUSTOMER_ROLES = ['USER', 'CUSTOMER'];
 function isCustomerRole(role) {
@@ -114,12 +120,12 @@ function stageOf(ticket) {
 }
 
 function blockStyle(ticket, sla) {
-  if (sla.risk === 2) return { bg: C.coral, ink: '#FFFFFF' };
-  if (sla.risk === 1) return { bg: C.marigold, ink: C.marigoldInk };
+  if (sla.risk === 2) return { bg: 'bg-[#C2410C]', ink: '#FFFFFF' };
+  if (sla.risk === 1) return { bg: 'bg-[#FFD166]', ink: C.marigoldInk };
   if (ticket?.status === 'RESOLVED' || ticket?.status === 'CLOSED') {
-    return { bg: C.mint, ink: C.mintInk2 };
+    return { bg: 'bg-[#CCF7E4]', ink: C.mintInk2 };
   }
-  return { bg: C.violetTint, ink: '#4A4776' };
+  return { bg: 'bg-[#EBE8FF]', ink: '#4A4776' };
 }
 
 function whenLabel(dateString) {
@@ -150,9 +156,9 @@ export const TicketCard = memo(function TicketCard({ ticket, index = 0, onPress,
   const assignee = ticket?.assigned_employee_name?.trim();
   const owner = assignee ||user?.name|| 'No owner';
   const avIdx = index % AVATAR_BG.length;
-  const slaInk = sla.risk === 2 ? C.coral : sla.risk === 1 ? '#8A5A00' : '#B8B8B8';
+  const slaInk = sla.risk === 2 ? 'text-[#C2410C]' : sla.risk === 1 ? 'text-[#8A5A00]' : 'text-[#B8B8B8]';
   const stage = stageOf(ticket);
-  const stageFill = status === 'ESCALATED' ? C.coral : stage === 4 ? C.mintSpine : C.violet;
+  const stageFill = status === 'ESCALATED' ? 'bg-[#C2410C]' : stage === 4 ? 'bg-[#12B886]' : 'bg-[#6C5CE7]';
   const source = sourceOf(ticket);
   const leftBlockLabel = isCustomerView ? source : priorityOf(ticket);
   const leftBlockStyle = block;
@@ -163,59 +169,38 @@ export const TicketCard = memo(function TicketCard({ ticket, index = 0, onPress,
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.88}
-      className="shadow-sm"
-      style={{
-        backgroundColor: C.card,
-        borderRadius: 26,
-        padding: 16,
-        marginHorizontal: 16,
-        marginBottom: 12,
-        gap: 11,
-      }}
+      className="shadow-sm rounded-[26px] p-[12px] std:p-[16px] mx-[12px] std:mx-[16px] mb-[12px] gap-[11px] bg-[#FFFFFF]"
     >
-      <View className="flex-row items-center" style={{ gap: 10 }}>
-        <View
-          className="items-center justify-center"
-          style={{
-            width:  42,
-            height: 42,
-            borderRadius: 16,
-            backgroundColor: leftBlockStyle.bg,
-          }}
-        >
-          <Text className="font-sans-semibold" style={{ fontSize: 13, color: leftBlockStyle.ink }}>
-             <MaterialCommunityIcons name="ticket-confirmation-outline" size={20} color='' className=""/>
-            
-          </Text>
+      <View className="flex-row items-center gap-[10px]">
+        <View className={`items-center justify-center w-[42px] h-[42px] rounded-[16px] ${leftBlockStyle.bg}`}>
+          <MaterialCommunityIcons name="ticket-confirmation-outline" size={20} color={leftBlockStyle.ink} />
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 19, color: C.ink }} numberOfLines={1}>
+        <View className="flex-1 min-w-0">
+          <Text className="font-sans-semibold text-[19px] text-[#151233]" numberOfLines={1}>
             {subject}
           </Text>
-          <Text className="font-sans " style={{ fontSize: 12, color: C.inkMuted }} numberOfLines={1}>
+          <Text className="font-sans text-[12px] text-[#6D6A96]" numberOfLines={1}>
             {subtitleText}
           </Text>
         </View>
         <View
-          className="items-center justify-center"
-          style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: C.violetTint }}
+          className="items-center justify-center w-[34px] h-[34px] rounded-[999px] bg-[#EBE8FF]"
         >
           <Feather name="arrow-right" size={15} color={C.ink} />
         </View>
       </View>
 
-      <View className="flex-row items-center" style={{ gap: 9 }}>
-        <View style={{ backgroundColor: meta.tint, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+      <View className="flex-row items-center gap-[9px]">
+        <View className={`rounded-[999px] px-[10px] py-[4px] ${meta.tint}`}>
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: 9.5, letterSpacing: 0.7, textTransform: 'uppercase', color: meta.ink }}
+            maxFontSizeMultiplier={DENSE_FONT_SCALE}
+            className={`font-sans-semibold text-[9.5px] tracking-[0.7px] uppercase ${meta.ink}`}
           >
             {statusLabel(status)}
           </Text>
         </View>
         <Text
-          className="font-sans-medium"
-          style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: slaInk }}
+          className={`font-sans-medium flex-1 min-w-0 text-[11.5px] ${slaInk}`}
           numberOfLines={1}
         >
           {sla.text}
@@ -223,34 +208,31 @@ export const TicketCard = memo(function TicketCard({ ticket, index = 0, onPress,
 
 
 
-        <View
-          className="items-center justify-center"
-          style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: AVATAR_BG[avIdx] }}
-        >
-          <Text className="font-sans-semibold" style={{ fontSize: 9, color: AVATAR_INK[avIdx] }}>
+        <View className={`items-center justify-center w-[24px] h-[24px] rounded-[999px] ${AVATAR_BG_CLASS[avIdx]}`}>
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={`font-sans-semibold text-[9px] ${AVATAR_INK_CLASS[avIdx]}`}>
             {initialsOf(owner === 'No owner' ? '?' : owner)}
           </Text>
         </View>
-        <Text className="font-sans" style={{ fontSize: 11, color: C.inkMuted }} numberOfLines={1}>
+        <Text className="font-sans text-[11px] text-[#6D6A96]" numberOfLines={1}>
           {owner}
         </Text>
 
 
       </View>
 
-      <View style={{ gap: 8, paddingTop: 2 }}>
-        <View style={{ height: 3, borderRadius: 999, backgroundColor: C.track, overflow: 'hidden' }}>
-          <View style={{ height: '100%', borderRadius: 999, width: `${(stage / 4) * 100}%`, backgroundColor: stageFill }} />
+      <View className="gap-[8px] pt-[2px]">
+        <View className="h-[3px] rounded-[999px] overflow-hidden bg-[#EBE8FF]">
+          <View className={`h-full rounded-[999px] ${STAGE_WIDTH[stage]} ${stageFill}`} />
         </View>
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          <Text className="font-mono" style={{ fontSize: 10.5, color: C.mono }} numberOfLines={1}>
+        <View className="flex-row items-center gap-[8px]">
+          <Text className="font-mono text-[10.5px] text-[#9D9AC0]" numberOfLines={1}>
             {ticketNo}
           </Text>
-          <Text className="font-mono" style={{ flex: 1, minWidth: 0, fontSize: 10.5, color: C.monoFaint }} numberOfLines={1}>
+          <Text className="font-mono flex-1 min-w-0 text-[10.5px] text-[#C3C0E2]" numberOfLines={1}>
             {isCustomerView? '':ticket?.circuit_description}
           </Text>
           <Feather name="clock" size={12} color={C.mono} />
-          <Text className="font-sans-medium" style={{ fontSize: 10.5, color: C.inkMuted }} numberOfLines={1}>
+          <Text className="font-sans-medium text-[10.5px] text-[#6D6A96]" numberOfLines={1}>
             {whenLabel(ticket?.updated_at || ticket?.created_at)}
           </Text>
         </View>

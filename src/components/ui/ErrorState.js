@@ -22,8 +22,7 @@ export default function ErrorState({
       {onRetry ? (
         <Pressable
           onPress={onRetry}
-          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-          className="bg-primary-500 px-8 py-4 rounded-full shadow-sm"
+          className="bg-primary-500 px-8 py-4 rounded-full shadow-sm active:opacity-85"
         >
           <Text className="font-sans-semibold text-white text-base">{retryLabel}</Text>
         </Pressable>

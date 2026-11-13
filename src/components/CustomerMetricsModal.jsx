@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import {
-    Modal, View, Text, ScrollView, TouchableOpacity,
-    ActivityIndicator, Dimensions, StyleSheet
+    View, Text, ScrollView, TouchableOpacity,
+    ActivityIndicator, StyleSheet, useWindowDimensions,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LineChart, BarChart, PieChart, StackedBarChart } from 'react-native-gifted-charts';
 import { useCustomerMetrics } from '../hooks/useCustomerMetrics';
 import { useCustomerConnections } from '../hooks/useCustomers';
+import { ScreenScrollView } from './layout/Screen';
+import Sheet from './layout/Sheet';
 
-// Dynamically calculate chart width based on screen size minus padding
-const screenWidth = Dimensions.get('window').width;
-const CHART_WIDTH = screenWidth - 96; // Adjusting for card padding
+// Chart card padding + y-axis column, subtracted from the measured content width.
+const CHART_INSET = 64;
+const PIE_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'];
+const PIE_SWATCHES = ['bg-[#3b82f6]', 'bg-[#f59e0b]', 'bg-[#10b981]', 'bg-[#ef4444]', 'bg-[#8b5cf6]'];
 
 // Plain StyleSheet (not NativeWind className) for the circuit-filter pills
 // specifically. Every crash report for the "Couldn't find a navigation
@@ -142,6 +145,10 @@ function ChartCard({ title, subtitle, children }) {
 
 export default function CustomerMetricsModal({ visible, onClose, customerId }) {
     const [circuitId, setCircuitId] = useState('ALL');
+    const { width: windowWidth } = useWindowDimensions();
+    const [contentWidth, setContentWidth] = useState(0);
+    // Measured from the scroll content; window-based until the first layout.
+    const chartWidth = Math.max((contentWidth || windowWidth - 32) - CHART_INSET, 120);
 
     // Only fetch while the modal is actually open — CustomerMetricsModal
     // stays mounted by the parent screen even when `visible` is false (the
@@ -160,7 +167,7 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
 
     // Common styles to make gifted-charts look much cleaner
     const commonChartProps = {
-        width: CHART_WIDTH,
+        width: chartWidth,
         yAxisTextStyle: { color: '#94a3b8', fontSize: 11, fontWeight: '500' },
         xAxisLabelTextStyle: { color: '#94a3b8', fontSize: 11, fontWeight: '500' },
         rulesColor: '#f1f5f9',
@@ -171,8 +178,7 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
     };
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-            <View className="flex-1 bg-[#f8fafc]">
+        <Sheet visible={visible} onClose={onClose} variant="full" keyboard={false} className="bg-[#f8fafc]">
 
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-6 pt-6 pb-4 bg-white border-b border-slate-100 z-10">
@@ -195,7 +201,7 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
+                        contentContainerClassName="px-[12px] std:px-[16px] py-[12px]"
                     >
                         <CircuitPill
                             label="All Circuits"
@@ -238,10 +244,10 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
                 )}
 
                 {data && !isLoading && !isError && (
-                    <ScrollView className="flex-1 px-4 pt-6" contentContainerStyle={{ paddingBottom: 60 }}>
+                    <ScreenScrollView className="flex-1 px-4 pt-6" endSpace={60} safeArea={false}>
 
                         {/* KPI Rows */}
-                        <View className="flex-row mb-4 px-2">
+                        <View className="flex-row mb-4 px-2" onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}>
                             <KpiCard label="Uptime Δ" kpi={data.kpiHighlights?.uptimeDelta} />
                             <KpiCard label="MTTR Reduction" kpi={data.kpiHighlights?.mttrReduction} />
                         </View>
@@ -298,7 +304,7 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
                                 <PieChart
                                     data={(data.faultCategoryDistribution ?? []).map((d, i) => ({
                                         value: d.value,
-                                        color: ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'][i % 5],
+                                        color: PIE_COLORS[i % PIE_COLORS.length],
                                     }))}
                                     donut
                                     radius={110}
@@ -321,10 +327,7 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
                             <View className="flex-row flex-wrap justify-center gap-3 mt-4">
                                 {(data.faultCategoryDistribution ?? []).map((d, i) => (
                                     <View key={d.name || i} className="flex-row items-center mr-3 mb-2">
-                                        <View
-                                            className="w-3 h-3 rounded-full mr-2"
-                                            style={{ backgroundColor: ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'][i % 5] }}
-                                        />
+                                        <View className={`w-3 h-3 rounded-full mr-2 ${PIE_SWATCHES[i % PIE_SWATCHES.length]}`} />
                                         <Text className="text-slate-600 text-xs font-medium">{d.name} ({d.value})</Text>
                                     </View>
                                 ))}
@@ -355,9 +358,8 @@ export default function CustomerMetricsModal({ visible, onClose, customerId }) {
                             </View>
                         </ChartCard>
 
-                    </ScrollView>
+                    </ScreenScrollView>
                 )}
-            </View>
-        </Modal>
+        </Sheet>
     );
 }

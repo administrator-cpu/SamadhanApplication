@@ -6,16 +6,17 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
-  View,
+  View, StyleSheet,
 } from 'react-native';
 
 import ConfirmDialog from '../../../src/components/ConfirmDialog';
+import Screen, { ScreenScrollView, StickyFooter, TopInset } from '../../../src/components/layout/Screen';
+
+// Save bar (52 + 24 padding) + breathing room.
+const SAVE_BAR_SPACE = 100;
 import { useDeleteEmployee, useEmployees, useUpdateEmployee } from '../../../src/hooks/useCustomers';
 import { useCategories } from '../../../src/hooks/useTickets';
 
@@ -40,7 +41,6 @@ const C = {
   coralSoft: '#ff9d8f',
 };
 
-const MONO = 'ui-monospace';
 
 const ROLE_LABELS = {
   SUPPORT_AGENT: 'Support agent',
@@ -124,7 +124,7 @@ export default function EditStaff() {
 
   if (!employee) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <View className="flex-1 bg-[#f3f2fd] items-center justify-center">
         <ActivityIndicator color="#4a34c7" />
       </View>
     );
@@ -163,10 +163,9 @@ export default function EditStaff() {
   };
 
   const Field = ({ label, value, onChangeText, keyboardType, autoCapitalize, mono, placeholder, last, fieldKey }) => (
-    <View style={{ paddingVertical: 12, borderBottomWidth: last ? 0 : 1, borderBottomColor: C.hair }}>
+    <View className={`py-[12px] border-b-[#f0eefb] ${last ? 'border-b-0' : 'border-b'}`}>
       <Text
-        className="font-sans-semibold"
-        style={{ fontSize: 10, letterSpacing: 1.2, color: focused === fieldKey ? C.violet : C.muted }}
+        className={`font-sans-semibold text-[10px] tracking-[1.2px] ${focused === fieldKey ? 'text-[#8f7bff]' : 'text-[#9d9ac0]'}`}
       >
         {label.toUpperCase()}
       </Text>
@@ -179,15 +178,7 @@ export default function EditStaff() {
         autoCapitalize={autoCapitalize}
         placeholder={placeholder}
         placeholderTextColor={C.muted}
-        className={mono ? undefined : 'font-sans-semibold'}
-        style={{
-          marginTop: 4,
-          fontSize: 15,
-          color: C.ink,
-          paddingVertical: 0,
-          letterSpacing: -0.2,
-          ...(mono ? { fontFamily: MONO } : null),
-        }}
+        className={`mt-[4px] text-[15px] text-[#151233] py-0 tracking-[-0.2px] ${mono ? 'font-[ui-monospace]' : 'font-sans-semibold'}`}
       />
     </View>
   );
@@ -199,63 +190,45 @@ export default function EditStaff() {
     : `Save ${changes.join(', ')}`;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 140 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <Screen edges={[]} statusBarStyle="light" className="bg-[#f3f2fd]">
+      <ScreenScrollView
+        className="flex-1"
+        keyboard
+        keyboardOffset={SAVE_BAR_SPACE}
+        endSpace={SAVE_BAR_SPACE}
       >
-        {/* identity */}
-        <View
-          style={{
-            backgroundColor: C.ink,
-            paddingHorizontal: 20,
-            paddingTop: 58,
-            paddingBottom: 22,
-            borderBottomLeftRadius: 32,
-            borderBottomRightRadius: 32,
-          }}
+        {/* identity — dark header runs under the status bar */}
+        <TopInset
+          extra={16}
+          className="bg-[#151233] px-[16px] std:px-[20px] pb-[22px] rounded-bl-[32px] rounded-br-[32px]"
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View className="flex-row items-center gap-[14px]">
             <View
-              style={{
-                width: 62,
-                height: 62,
-                borderRadius: 22,
-                backgroundColor: C.headSurface,
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}
+              className="w-[62px] h-[62px] rounded-[22px] bg-[#2b2359] items-center justify-center overflow-hidden"
             >
               {employee.profile_image ? (
-                <Image source={{ uri: employee.profile_image }} style={{ width: 62, height: 62 }} />
+                <Image source={{ uri: employee.profile_image }} className="w-[62px] h-[62px]" />
               ) : (
-                <Text className="font-sans-bold" style={{ fontSize: 24, letterSpacing: -0.5, color: C.violetPale }}>
+                <Text className="font-sans-bold text-[24px] tracking-[-0.5px] text-[#b6a9ff]">
                   {getInitials(employee.name)}
                 </Text>
               )}
             </View>
 
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View className="flex-1 min-w-0">
               <Text
-                className="font-sans-bold"
+                className="font-sans-bold text-[22px] tracking-[-0.7px] text-[#f3f2fd]"
                 numberOfLines={1}
-                style={{ fontSize: 22, letterSpacing: -0.7, color: C.bg }}
               >
                 {name || employee.name}
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <View style={{ backgroundColor: C.headChip, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 }}>
-                  <Text className="font-sans-bold" style={{ fontSize: 10, letterSpacing: 0.4, color: C.headInk }}>
+              <View className="flex-row items-center gap-[8px] mt-[6px]">
+                <View className="bg-[#3a2f7a] rounded-[999px] px-[9px] py-[3px]">
+                  <Text className="font-sans-bold text-[10px] tracking-[0.4px] text-[#c9bfff]">
                     {ROLE_LABELS[employee.role] || employee.role}
                   </Text>
                 </View>
-                <Text style={{ fontFamily: MONO, fontSize: 10.5, color: C.headMuted }}>
+                <Text className="font-[ui-monospace] text-[10.5px] text-[#7c78b8]">
                   {employee.employee_id}
                 </Text>
               </View>
@@ -263,19 +236,10 @@ export default function EditStaff() {
           </View>
 
           <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginTop: 18,
-              paddingTop: 14,
-              borderTopWidth: 1,
-              borderTopColor: 'rgba(255,255,255,0.09)',
-            }}
+            className="flex-row items-center justify-between mt-[18px] pt-[14px] border-t border-t-[rgba(255,255,255,0.09)]"
           >
             <Text
-              className="font-sans-semibold"
-              style={{ flex: 1, fontSize: 11.5, color: noCategories ? C.coralSoft : C.headMuted }}
+              className={`font-sans-semibold flex-1 text-[11.5px] ${noCategories ? 'text-[#ff9d8f]' : 'text-[#7c78b8]'}`}
             >
               {isAgent
                 ? noCategories
@@ -285,16 +249,16 @@ export default function EditStaff() {
                     }`
                 : 'Sales — not in the ticket routing pool'}
             </Text>
-            <Text className="font-sans" style={{ fontSize: 11, color: C.headMuted }}>
+            <Text className="font-sans text-[11px] text-[#7c78b8]">
               {joinedLabel(employee.joined_at)}
             </Text>
           </View>
-        </View>
+        </TopInset>
 
-        <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 18 }}>
+        <View className="px-[12px] std:px-[16px] pt-[18px] gap-[18px]">
           {updateError ? (
-            <View style={{ backgroundColor: C.dangerBg, borderRadius: 16, padding: 13 }}>
-              <Text className="font-sans-semibold" style={{ fontSize: 12, lineHeight: 17, color: C.dangerDeep }}>
+            <View className="bg-[#ffe1e1] rounded-[16px] p-[13px]">
+              <Text className="font-sans-semibold text-[12px] leading-[17px] text-[#7a1c16]">
                 {updateError.message || 'Failed to save changes.'}
               </Text>
             </View>
@@ -302,17 +266,7 @@ export default function EditStaff() {
 
           {/* details */}
           <View
-            style={{
-              backgroundColor: C.card,
-              borderRadius: 24,
-              paddingHorizontal: 16,
-              paddingVertical: 6,
-              shadowColor: C.ink,
-              shadowOpacity: 0.06,
-              shadowRadius: 14,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: 2,
-            }}
+            className="bg-[#ffffff] rounded-[24px] px-[12px] std:px-[16px] py-[6px]" style={sx.shadow1}
           >
             <Field fieldKey="name" label="Full name" value={name} onChangeText={setName} />
             <Field
@@ -337,67 +291,44 @@ export default function EditStaff() {
 
           {/* categories = routing */}
           {isAgent && (
-            <View style={{ gap: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4 }}>
-                <Text className="font-sans-bold" style={{ fontSize: 14, letterSpacing: -0.3, color: C.ink }}>
+            <View className="gap-[10px]">
+              <View className="flex-row items-baseline justify-between px-[4px]">
+                <Text className="font-sans-bold text-[14px] tracking-[-0.3px] text-[#151233]">
                   Ticket categories
                 </Text>
-                <Text style={{ fontFamily: MONO, fontSize: 11, color: C.sub }}>
+                <Text className="font-[ui-monospace] text-[11px] text-[#6d6a96]">
                   {selectedCategories.length} of {(categories || []).length}
                 </Text>
               </View>
 
               <Text
-                className="font-sans"
-                style={{ paddingHorizontal: 4, fontSize: 11.5, lineHeight: 17, color: C.sub }}
+                className="font-sans px-[4px] text-[11.5px] leading-[17px] text-[#6d6a96]"
               >
                 Tickets in a selected category can be assigned to this agent. Unselected categories never reach them.
               </Text>
 
               {noCategories && (
                 <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                    backgroundColor: C.dangerBg,
-                    borderRadius: 18,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                  }}
+                  className="flex-row items-center gap-[10px] bg-[#ffe1e1] rounded-[18px] px-[14px] py-[12px]"
                 >
                   <Feather name="alert-triangle" size={16} color={C.dangerInk} />
-                  <Text className="font-sans-bold" style={{ flex: 1, fontSize: 11.5, lineHeight: 16, color: C.dangerDeep }}>
+                  <Text className="font-sans-bold flex-1 text-[11.5px] leading-[16px] text-[#7a1c16]">
                     With none selected this agent is invisible to routing.
                   </Text>
                 </View>
               )}
 
-              <View style={{ gap: 7 }}>
+              <View className="gap-[7px]">
                 {(categories || []).map((cat) => {
                   const on = selectedCategories.includes(cat.name);
                   return (
                     <Pressable key={cat.id} onPress={() => toggleCategory(cat.name)}>
                       <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 11,
-                          backgroundColor: on ? C.ink : C.card,
-                          borderRadius: 16,
-                          paddingHorizontal: 14,
-                          paddingVertical: 13,
-                          shadowColor: C.ink,
-                          shadowOpacity: 0.06,
-                          shadowRadius: 12,
-                          shadowOffset: { width: 0, height: 5 },
-                          elevation: 1,
-                        }}
+                        className={`flex-row items-center gap-[11px] rounded-[16px] px-[14px] py-[13px] ${on ? 'bg-[#151233]' : 'bg-[#ffffff]'}`} style={sx.shadow2}
                       >
                         <Feather name="check-circle" size={19} color={on ? C.violet : '#dedbf5'} />
                         <Text
-                          className="font-sans-semibold"
-                          style={{ flex: 1, fontSize: 13.5, letterSpacing: -0.15, color: on ? C.bg : C.inkSoft }}
+                          className={`font-sans-semibold flex-1 text-[13.5px] tracking-[-0.15px] ${on ? 'text-[#f3f2fd]' : 'text-[#3a3670]'}`}
                         >
                           {cat.name}
                         </Text>
@@ -412,21 +343,14 @@ export default function EditStaff() {
           {/* remove */}
           <Pressable onPress={() => setDeleteDialogOpen(true)} disabled={isDeleting}>
             <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 14,
-                opacity: isDeleting ? 0.5 : 1,
-              }}
+              className={`flex-row items-center justify-center gap-[8px] py-[14px] ${isDeleting ? 'opacity-[0.5]' : 'opacity-100'}`}
             >
               {isDeleting ? (
                 <ActivityIndicator color={C.dangerInk} />
               ) : (
                 <>
                   <Feather name="trash-2" size={15} color={C.dangerInk} />
-                  <Text className="font-sans-bold" style={{ fontSize: 12.5, color: C.dangerInk }}>
+                  <Text className="font-sans-bold text-[12.5px] text-[#b3261e]">
                     Remove from team
                   </Text>
                 </>
@@ -434,39 +358,28 @@ export default function EditStaff() {
             </View>
           </Pressable>
         </View>
-      </ScrollView>
+      </ScreenScrollView>
 
       {/* save bar */}
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28, backgroundColor: C.bg }}>
+      <StickyFooter gap={0} className="px-[12px] std:px-[16px] pt-[12px] pb-[12px] bg-[#f3f2fd]">
         <Pressable onPress={handleSave} disabled={!dirty || isUpdating}>
           <View
-            style={{
-              backgroundColor: dirty ? C.ink : C.idle,
-              borderRadius: 999,
-              minHeight: 52,
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: C.ink,
-              shadowOpacity: dirty ? 0.14 : 0,
-              shadowRadius: 14,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: dirty ? 3 : 0,
-            }}
+            className={`rounded-[999px] min-h-[52px] items-center justify-center ${dirty ? 'bg-[#151233]' : 'bg-[#e6e3f7]'}`}
+            style={dirty ? sx.submitShadow : undefined}
           >
             {isUpdating ? (
               <ActivityIndicator color={C.bg} />
             ) : (
               <Text
-                className="font-sans-bold"
+                className={`font-sans-bold text-[14px] tracking-[-0.15px] ${dirty ? 'text-[#f3f2fd]' : 'text-[#9d9ac0]'}`}
                 numberOfLines={1}
-                style={{ fontSize: 14, letterSpacing: -0.15, color: dirty ? C.bg : C.muted }}
               >
                 {saveLabel}
               </Text>
             )}
           </View>
         </Pressable>
-      </View>
+      </StickyFooter>
 
       <ConfirmDialog
         visible={deleteDialogOpen}
@@ -479,6 +392,12 @@ export default function EditStaff() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteDialogOpen(false)}
       />
-    </KeyboardAvoidingView>
+    </Screen>
   );
 }
+
+const sx = StyleSheet.create({
+  shadow1: { shadowColor: C.ink, shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  shadow2: { shadowColor: C.ink, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 1 },
+  submitShadow: { shadowColor: C.ink, shadowOpacity: 0.14, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
+});

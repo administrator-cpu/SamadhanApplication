@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
-  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -21,6 +20,10 @@ import { useAuthStore } from '../store/authStore';
 import TicketCard, { C } from './TicketCard';
 import CustomerSettingsSheet from './CustomerSettingsSheet';
 import TicketSearchFilterBar from './TicketSearchFilterBar';
+import Screen, { BottomInset, ScreenScrollView } from './layout/Screen';
+
+// Floating raise button (56) + gap above it.
+const RAISE_BAR_SPACE = 56 + 12 + 24;
 
 const SEGMENTS = [
   { id: 'NEEDS_YOU', label: 'Needs you' },
@@ -152,10 +155,9 @@ function matchesSearch(ticket, query) {
   const segmentLabel = SEGMENTS.find((s) => s.id === activeSegment)?.label ?? 'Needs you';
 
   return (
-    <View className="flex-1 mt-[35px]" style={{ backgroundColor: C.bg }}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+    <Screen className="bg-[#F3F2FD]">
+      <ScreenScrollView
+        endSpace={RAISE_BAR_SPACE}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -168,29 +170,27 @@ function matchesSearch(ticket, query) {
         }
       >
         {/* Greeting */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 14 }}>
-          <View className="flex-row items-center" style={{ gap: 11 }}>
+        <View className="px-[12px] std:px-[16px] pt-[16px] gap-[14px]">
+          <View className="flex-row items-center gap-[11px]">
             <TouchableOpacity
               onPress={handleGoToProfile}
               activeOpacity={0.85}
-              className="items-center justify-center"
-              style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: C.mint }}
+              className="items-center justify-center w-[44px] h-[44px] rounded-[999px] bg-[#CCF7E4]"
             >
               <Feather name="user" size={19} color={C.mintInk2} />
             </TouchableOpacity>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="font-sans-semibold" style={{ fontSize: 17, color: C.ink }} numberOfLines={1}>
+            <View className="flex-1 min-w-0">
+              <Text className="font-sans-semibold text-[17px] text-[#151233]" numberOfLines={1}>
                 Hello, {user?.name || 'there'}
               </Text>
-              <Text className="font-sans" style={{ fontSize: 11.5, color: C.inkMuted, marginTop: 2 }} numberOfLines={1}>
+              <Text className="font-sans text-[11.5px] mt-[2px] text-[#6D6A96]" numberOfLines={1}>
                 {filteredTickets.length} total · {segmentCounts.RESOLVED} resolved
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => setSettingsVisible(true)}
               activeOpacity={0.85}
-              className="items-center justify-center shadow-sm"
-              style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: '#FFFFFF' }}
+              className="items-center justify-center shadow-sm w-[40px] h-[40px] rounded-[999px] bg-[#FFFFFF]"
             >
               <Feather name="settings" size={18} color={C.ink} />
             </TouchableOpacity>
@@ -202,34 +202,24 @@ function matchesSearch(ticket, query) {
 
           {/* Latest Request hero */}
           {latestTicket && (
-            <View style={{ backgroundColor: C.mint, borderRadius: 30, padding: 20, overflow: 'hidden' }}>
+            <View className="rounded-[30px] p-[20px] overflow-hidden bg-[#CCF7E4]">
               <View
-                style={{
-                  position: 'absolute',
-                  right: -30,
-                  bottom: -50,
-                  width: 140,
-                  height: 140,
-                  borderRadius: 999,
-                  backgroundColor: 'rgba(15,122,86,0.12)',
-                }}
+                className="absolute right-[-30px] bottom-[-50px] w-[140px] h-[140px] rounded-[999px] bg-[rgba(15,122,86,0.12)]"
               />
               <View className="flex-row items-start justify-between">
-                <View style={{ flex: 1, paddingRight: 12 }}>
+                <View className="flex-1 pr-[12px]">
                   <Text
-                    className="font-sans-semibold"
-                    style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: C.mintInk2 }}
+                    className="font-sans-semibold text-[10px] tracking-[1.2px] uppercase text-[#0F7A56]"
                   >
                     Latest Request
                   </Text>
                   <Text
-                    className="font-sans-semibold"
-                    style={{ fontSize: 26, color: C.mintInk, marginTop: 4 }}
+                    className="font-sans-semibold text-[26px] mt-[4px] text-[#0D6B4B]"
                     numberOfLines={1}
                   >
                     {latestTicket.subject?.trim() || 'Support Request'}
                   </Text>
-                  <Text className="font-sans" style={{ fontSize: 13, color: C.mintInk2, marginTop: 6 }}>
+                  <Text className="font-sans text-[13px] mt-[6px] text-[#0F7A56]">
                     {statusSummaryLabel(latestTicket)}
                   </Text>
                 </View>
@@ -239,10 +229,9 @@ function matchesSearch(ticket, query) {
               <TouchableOpacity
                 onPress={() => handleTicketPress(latestTicket.id)}
                 activeOpacity={0.85}
-                className="flex-row items-center self-start"
-                style={{ backgroundColor: C.ink, borderRadius: 999, paddingHorizontal: 18, minHeight: 44, gap: 8, marginTop: 18 }}
+                className="flex-row items-center self-start rounded-[999px] px-[18px] min-h-[44px] gap-[8px] mt-[18px] bg-[#151233]"
               >
-                <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.bg }}>
+                <Text className="font-sans-semibold text-[13px] text-[#F3F2FD]">
                   Track it
                 </Text>
                 <Feather name="arrow-right" size={15} color={C.bg} />
@@ -259,7 +248,7 @@ function matchesSearch(ticket, query) {
           />
 
           {/* Segmented tabs — counts now reflect the active status filter too */}
-          <View className="flex-row" style={{ backgroundColor: C.ink, borderRadius: 999, padding: 5, gap: 3 }}>
+          <View className="flex-row rounded-[999px] p-[5px] gap-[3px] bg-[#151233]">
             {SEGMENTS.map((segment) => {
               const isActive = activeSegment === segment.id;
               const count = segmentCounts[segment.id] ?? 0;
@@ -271,18 +260,10 @@ function matchesSearch(ticket, query) {
                     setActiveSegment(segment.id);
                   }}
                   activeOpacity={0.85}
-                  className="flex-row items-center justify-center"
-                  style={{
-                    flex: 1,
-                    borderRadius: 999,
-                    paddingVertical: 10,
-                    gap: 5,
-                    backgroundColor: isActive ? '#FDF8EE' : 'transparent',
-                  }}
+                  className={`flex-row items-center justify-center flex-1 rounded-[999px] py-[10px] gap-[5px] ${isActive ? 'bg-[#FDF8EE]' : 'bg-transparent'}`}
                 >
                   <Text
-                    className="font-sans-semibold"
-                    style={{ fontSize: 12.5, color: isActive ? C.ink : '#C0B6A5' }}
+                    className={`font-sans-semibold text-[12.5px] ${isActive ? 'text-[#151233]' : 'text-[#C0B6A5]'}`}
                     numberOfLines={1}
                   >
                     {segment.label}
@@ -293,16 +274,16 @@ function matchesSearch(ticket, query) {
             })}
           </View>
 
-          <Text className="font-sans" style={{ fontSize: 11, color: C.inkFaint }}>
+          <Text className="font-sans text-[11px] text-[#9D9AC0]">
             {segmentLabel} · {activeTickets.length} ticket{activeTickets.length === 1 ? '' : 's'}
             {statusFilter.length > 0 ? ' · filtered' : ''}
           </Text>
         </View>
 
         {/* Ticket list */}
-        <View style={{ paddingTop: 14 }}>
+        <View className="pt-[14px]">
           {showSkeleton ? (
-            <View style={{ paddingHorizontal: 16 }}>
+            <View className="px-[12px] std:px-[16px]">
               <SkeletonList count={4} />
             </View>
           ) : isError ? (
@@ -312,7 +293,7 @@ function matchesSearch(ticket, query) {
               onRetry={refetch}
             />
           ) : activeTickets.length === 0 ? (
-            <View style={{ paddingHorizontal: 16 }}>
+            <View className="px-[12px] std:px-[16px]">
               <EmptyState
                 icon="coffee"
                 title="All clear"
@@ -345,29 +326,28 @@ function matchesSearch(ticket, query) {
               {isFetchingNextPage ? (
                 <ActivityIndicator color={C.violet} />
               ) : (
-                <Text className="font-sans-semibold" style={{ color: C.violet, fontSize: 13 }}>
+                <Text className="font-sans-semibold text-[13px] text-[#6C5CE7]">
                   Load more
                 </Text>
               )}
             </TouchableOpacity>
           )}
         </View>
-      </ScrollView>
+      </ScreenScrollView>
 
-      <View style={{ position: 'absolute', bottom: 24, left: 16, right: 16 }}>
+      <BottomInset extra={12} className="absolute bottom-0 left-[16px] right-[16px]">
         <TouchableOpacity
           onPress={handleRaiseTicket}
           activeOpacity={0.9}
-          className="flex-row items-center justify-center shadow-sm"
-          style={{ backgroundColor: C.violet, borderRadius: 999, height: 56, gap: 8 }}
+          className="flex-row items-center justify-center shadow-sm rounded-[999px] h-[56px] gap-[8px] bg-[#6C5CE7]"
         >
           <Feather name="plus" size={18} color="#FFFFFF" />
-          <Text className="font-sans-semibold" style={{ fontSize: 15, color: '#FFFFFF' }}>
+          <Text className="font-sans-semibold text-[15px] text-[#FFFFFF]">
             Raise a new request
           </Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </BottomInset>
+    </Screen>
   );
 }
 
@@ -381,8 +361,8 @@ function ProgressRing({ percent = 0, size = 64, stroke = 6 }) {
   const offset = circumference - (percent / 100) * circumference;
 
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+    <View className="items-center justify-center">
+      <Svg width={size} height={size}>
         <Circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(15,122,86,0.15)" strokeWidth={stroke} fill="none" />
         <Circle
           cx={size / 2}
@@ -398,9 +378,10 @@ function ProgressRing({ percent = 0, size = 64, stroke = 6 }) {
           origin={`${size / 2}, ${size / 2}`}
         />
       </Svg>
-      <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.mintInk }}>
+      <Text className="absolute font-sans-semibold text-[13px] text-[#0D6B4B]" maxFontSizeMultiplier={1.2}>
         {percent}%
       </Text>
     </View>
   );
 }
+

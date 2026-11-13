@@ -66,7 +66,7 @@
 //       onPressOut={() => animateTo(1)}
 //       disabled={disabled}
 //     >
-//       <Animated.View className={className} style={[{ transform: [{ scale }] }, style]}>
+//       <Animated.View className={className} style={[scaleStyle, style]}>
 //         {children}
 //       </Animated.View>
 //     </TouchableWithoutFeedback>
@@ -77,8 +77,7 @@
 // function DashboardHeader({ name }) {
 //   return (
 //     <View
-//       className="pt-14 pb-16 px-6 rounded-b-2xl"
-//       style={{ backgroundColor: '#161412' }}
+//       className="pt-14 pb-16 px-6 rounded-b-2xl bg-[#161412]"
 //     >
 //       <Text className="font-sans-semibold text-primary-200 text-xs uppercase tracking-widest mb-1.5">
 //         {getGreeting()}
@@ -214,7 +213,7 @@
 
 // function ActionGrid({ onRaiseTicket, onMyTickets, onGuidelines, onAnalytics }) {
 //   return (
-//     <View className="px-5 mt-6 flex-row flex-wrap justify-between" style={{ rowGap: 12 }}>
+//     <View className="px-5 mt-6 flex-row flex-wrap justify-between gap-y-[12px]">
 //       <RaiseTicketCard onPress={onRaiseTicket} />
 //       <ActionTile
 //         icon="file-text"

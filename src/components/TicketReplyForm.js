@@ -8,7 +8,6 @@ import {
   ActionSheetIOS,
   ActivityIndicator,
   Keyboard,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +21,11 @@ import { useAddTicketEvent } from '../hooks/useTickets';
 import { useAuthStore } from '../store/authStore';
 import { haptics } from '../utils/haptics';
 import { CARD_SHADOW, T } from './ticketTheme';
+import Sheet from './layout/Sheet';
+import { DENSE_FONT_SCALE } from './layout/tokens';
+
+const SCRIM = 'bg-[rgba(12,21,36,0.38)]';
+const SHEET = 'bg-[#FFFFFF] rounded-tl-[30px] rounded-tr-[30px] px-[18px] pt-[12px] pb-[16px]';
 
 const STAFF_ROLES = ['SUPPORT_AGENT', 'ADMIN'];
 const MAX_ATTACHMENTS = 6;
@@ -207,7 +211,7 @@ export default function TicketReplyForm({ ticket }) {
 
   return (
     // Transparent root — the screen wraps this in a floating white pill.
-    <View style={{ paddingHorizontal: 4, paddingVertical: 3 }}>
+    <View className="px-[4px] py-[3px]">
       {error ? (
         <Text style={styles.error}>{error.message || 'That reply did not send. Please try again.'}</Text>
       ) : null}
@@ -227,20 +231,24 @@ export default function TicketReplyForm({ ticket }) {
             onPress={() => setVisibleToCustomer((v) => !v)}
             icon={visibleToCustomer ? 'eye' : 'eye-off'}
             label={visibleToCustomer ? 'Customer sees this' : 'Internal note'}
-            activeTint={T.blueTint}
+            activeTint="bg-[#EAF2FE]"
             activeColor={T.blueInk}
-            idleTint={T.amberTint}
+            activeText="text-[#1B5FC0]"
+            idleTint="bg-[#FEF1E7]"
             idleColor={T.amberInk}
+            idleText="text-[#A85618]"
           />
           <ToggleChip
             active={sendEmail}
             onPress={() => setSendEmail((v) => !v)}
             icon="mail"
             label={sendEmail ? 'Email on' : 'Email off'}
-            activeTint={T.blueTint}
+            activeTint="bg-[#EAF2FE]"
             activeColor={T.blueInk}
-            idleTint={T.field}
+            activeText="text-[#1B5FC0]"
+            idleTint="bg-[#F2F5F9]"
             idleColor={T.soft}
+            idleText="text-[#6B7A93]"
           />
         </View>
       ) : null}
@@ -250,10 +258,10 @@ export default function TicketReplyForm({ ticket }) {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 10, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 10 }}
+          contentContainerClassName="gap-[10px] px-[8px] pt-[4px] pb-[10px]"
         >
           {attachments.map((att) => (
-            <View key={att.id} style={{ position: 'relative' }}>
+            <View key={att.id} className="relative">
               {att.kind === 'image' ? (
                 <Image
                   source={{ uri: att.uri }}
@@ -283,7 +291,8 @@ export default function TicketReplyForm({ ticket }) {
           activeOpacity={0.75}
           onPress={handleAttachPress}
           disabled={attachDisabled}
-          style={[styles.circleButton, { backgroundColor: T.field }, attachDisabled ? { opacity: 0.4 } : null]}
+          className={`bg-[#F2F5F9] ${attachDisabled ? 'opacity-40' : 'opacity-100'}`}
+          style={styles.circleButton}
         >
           <Feather name="plus" size={21} color={T.ink} />
         </TouchableOpacity>
@@ -295,22 +304,16 @@ export default function TicketReplyForm({ ticket }) {
           placeholder={isInternal ? 'Internal note…' : 'Write a message…'}
           placeholderTextColor={T.hint}
           multiline
-          style={[
-            styles.input,
-            isInternal ? { backgroundColor: T.amberTint } : null,
-          ]}
+          className={isInternal ? 'bg-[#FEF1E7]' : 'bg-[#F2F5F9]'}
+          style={styles.input}
         />
 
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={handleSend}
           disabled={isPending}
-          style={[
-            styles.circleButton,
-            {
-              backgroundColor: isPaused ? T.amber : isPending ? T.hint : hasContent || !canUseQuickReplies ? T.blue : T.ink,
-            },
-          ]}
+          className={isPaused ? 'bg-[#D9722B]' : isPending ? 'bg-[#9AAAC0]' : hasContent || !canUseQuickReplies ? 'bg-[#1B72E8]' : 'bg-[#0C1524]'}
+          style={styles.circleButton}
         >
           {isPaused ? (
             <Feather name="clock" size={19} color="#FFFFFF" />
@@ -324,22 +327,21 @@ export default function TicketReplyForm({ ticket }) {
 
       {/* Android attachment menu — iOS uses the native ActionSheetIOS. */}
       {Platform.OS !== 'ios' ? (
-        <Modal
+        <Sheet
           visible={attachMenuVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setAttachMenuVisible(false)}
+          onClose={() => setAttachMenuVisible(false)}
+          keyboard={false}
+          backdropClassName={SCRIM}
+          className={SHEET}
         >
-          <Pressable style={styles.scrim} onPress={() => setAttachMenuVisible(false)}>
-            <Pressable onPress={(e) => e.stopPropagation()} style={styles.sheet}>
               <View style={styles.grabber} />
               <Text style={styles.sheetTitle}>Add to this message</Text>
 
               <TouchableOpacity activeOpacity={0.7} onPress={handleAndroidPickMedia} style={styles.sheetRow}>
-                <View style={[styles.sheetChip, { backgroundColor: T.blueTint }]}>
+                <View className="bg-[#EAF2FE]" style={styles.sheetChip}>
                   <Feather name="image" size={17} color={T.blue} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View className="flex-1">
                   <Text style={styles.sheetRowTitle}>Photo or video</Text>
                   <Text style={styles.sheetRowNote}>Up to {MAX_ATTACHMENTS} files per message</Text>
                 </View>
@@ -347,10 +349,10 @@ export default function TicketReplyForm({ ticket }) {
               </TouchableOpacity>
 
               <TouchableOpacity activeOpacity={0.7} onPress={handleAndroidPickDocument} style={styles.sheetRow}>
-                <View style={[styles.sheetChip, { backgroundColor: T.greenTint }]}>
+                <View className="bg-[#DFF3EA]" style={styles.sheetChip}>
                   <Feather name="file-text" size={17} color={T.green} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View className="flex-1">
                   <Text style={styles.sheetRowTitle}>Document</Text>
                   <Text style={styles.sheetRowNote}>PDF, logs, reports</Text>
                 </View>
@@ -364,22 +366,22 @@ export default function TicketReplyForm({ ticket }) {
               >
                 <Text style={styles.sheetCancelText}>Cancel</Text>
               </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        </Sheet>
       ) : null}
 
       {/* Quick Reply panel — takes the keyboard's place when Send is
           tapped with an empty message. */}
-      <Modal visible={quickReplyVisible} transparent animationType="slide" onRequestClose={handleCloseQuickReply}>
-        <Pressable style={styles.scrim} onPress={handleCloseQuickReply}>
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={[styles.sheet, { maxHeight: '74%', paddingBottom: 30 }]}
-          >
+      <Sheet
+        visible={quickReplyVisible}
+        onClose={handleCloseQuickReply}
+        keyboard={false}
+        maxHeightRatio={0.74}
+        backdropClassName={SCRIM}
+        className={SHEET}
+      >
             <View style={styles.grabber} />
             <View style={styles.quickHeader}>
-              <View style={{ flex: 1 }}>
+              <View className="flex-1">
                 <Text style={styles.sheetTitle}>Saved replies</Text>
                 <Text style={styles.sheetSubtitle}>Tap one to drop it in — you can edit before sending.</Text>
               </View>
@@ -388,7 +390,7 @@ export default function TicketReplyForm({ ticket }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 4 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pt-[4px]">
               {quickReplies.map((reply, index) => (
                 <TouchableOpacity
                   key={index}
@@ -399,13 +401,13 @@ export default function TicketReplyForm({ ticket }) {
                   <Text numberOfLines={3} style={styles.quickText}>
                     {reply}
                   </Text>
-                  <Feather name="corner-down-left" size={15} color={T.faint} style={{ marginTop: 9 }} />
+                  <View className="mt-[9px]">
+                    <Feather name="corner-down-left" size={15} color={T.faint} />
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -419,15 +421,18 @@ function QuietNotice({ icon, text }) {
   );
 }
 
-function ToggleChip({ active, onPress, icon, label, activeTint, activeColor, idleTint, idleColor }) {
+function ToggleChip({ active, onPress, icon, label, activeTint, activeColor, activeText, idleTint, idleColor, idleText }) {
   return (
     <TouchableOpacity
       activeOpacity={0.75}
       onPress={onPress}
-      style={[styles.toggleChip, { backgroundColor: active ? activeTint : idleTint }]}
+      className={active ? activeTint : idleTint}
+      style={styles.toggleChip}
     >
       <Feather name={icon} size={13} color={active ? activeColor : idleColor} />
-      <Text style={[styles.toggleChipText, { color: active ? activeColor : idleColor }]}>{label}</Text>
+      <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={active ? activeText : idleText} style={styles.toggleChipText}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -480,7 +485,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 46,
     maxHeight: 110,
-    backgroundColor: T.field,
     borderRadius: 23,
     paddingHorizontal: 18,
     paddingTop: 13,
@@ -493,15 +497,6 @@ const styles = StyleSheet.create({
   quietNotice: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 14 },
   quietText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: T.muted },
 
-  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(12,21,36,0.38)' },
-  sheet: {
-    backgroundColor: T.surface,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 34,
-  },
   grabber: { width: 40, height: 4, borderRadius: 999, backgroundColor: '#DEE5EE', alignSelf: 'center', marginBottom: 16 },
   sheetTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3, color: T.ink },
   sheetSubtitle: { fontSize: 12, color: T.muted, marginTop: 3 },
@@ -524,3 +519,4 @@ const styles = StyleSheet.create({
   },
   quickText: { fontSize: 13.5, lineHeight: 20, color: T.body },
 });
+

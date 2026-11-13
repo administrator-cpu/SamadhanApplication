@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator, Dimensions, Platform, Modal, TextInput, FlatList,
+  View, Text, Pressable, ActivityIndicator, TextInput, FlatList, useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LineChart, BarChart, PieChart } from 'react-native-gifted-charts';
 import { useMyMetrics } from '../../src/hooks/useMyMetrics';
 import { useMyConnections } from '../../src/hooks/useCustomers';
+import Screen, { ScreenScrollView } from '../../src/components/layout/Screen';
+import Sheet from '../../src/components/layout/Sheet';
+import { DENSE_FONT_SCALE } from '../../src/components/layout/tokens';
 
 /* ── palette (matches design 6b) ───────────────────────────── */
 const C = {
@@ -26,11 +29,11 @@ const C = {
   dark: '#151233',
 };
 const THEME = {
-  cyan: { bg: '#ccf7e4', ink: '#0b3b2c', sub: '#0f7a56', chip: '#a8eecd' },
-  slate: { bg: '#ebe8ff', ink: '#2c2860', sub: '#6d6a96', chip: '#dcd8ff' },
-  violet: { bg: '#e6e1ff', ink: '#2c2860', sub: '#4a34c7', chip: '#d3ccff' },
-  amber: { bg: '#ffd166', ink: '#4a3200', sub: '#7a5200', chip: '#ffbe33' },
-  coral: { bg: '#ffdcd3', ink: '#7a2a14', sub: '#c2461f', chip: '#ffc4b5' },
+  cyan: { bg: 'bg-[#ccf7e4]', ink: '#0b3b2c', inkText: 'text-[#0b3b2c]', sub: 'text-[#0f7a56]', chip: 'bg-[#a8eecd]' },
+  slate: { bg: 'bg-[#ebe8ff]', ink: '#2c2860', inkText: 'text-[#2c2860]', sub: 'text-[#6d6a96]', chip: 'bg-[#dcd8ff]' },
+  violet: { bg: 'bg-[#e6e1ff]', ink: '#2c2860', inkText: 'text-[#2c2860]', sub: 'text-[#4a34c7]', chip: 'bg-[#d3ccff]' },
+  amber: { bg: 'bg-[#ffd166]', ink: '#4a3200', inkText: 'text-[#4a3200]', sub: 'text-[#7a5200]', chip: 'bg-[#ffbe33]' },
+  coral: { bg: 'bg-[#ffdcd3]', ink: '#7a2a14', inkText: 'text-[#7a2a14]', sub: 'text-[#c2461f]', chip: 'bg-[#ffc4b5]' },
 };
 const ICON = {
   trending_flat: 'minus',
@@ -41,15 +44,16 @@ const ICON = {
   check_circle: 'check-circle',
 };
 const SEV = [
-  { key: 'Critical', color: C.coral },
-  { key: 'Medium', color: C.marigold },
-  { key: 'Low', color: C.mint },
+  { key: 'Critical', color: C.coral, swatch: 'bg-[#ff6b57]' },
+  { key: 'Medium', color: C.marigold, swatch: 'bg-[#ffd166]' },
+  { key: 'Low', color: C.mint, swatch: 'bg-[#12b886]' },
 ];
 const SERIES_COLORS = [C.violet, C.mint, C.marigold, C.coral, '#8271ef'];
+const SERIES_SWATCH = ['bg-[#6c5ce7]', 'bg-[#12b886]', 'bg-[#ffd166]', 'bg-[#ff6b57]', 'bg-[#8271ef]'];
 const SLA_FLOOR = 99.5;
 
-const screenWidth = Dimensions.get('window').width;
-const CHART_WIDTH = screenWidth - 118;
+// Chart card padding (18 × 2) + y-axis label column (34) + spare (16).
+const CHART_INSET = 86;
 const MAX_ROWS = 40;
 
 const short = (n) => String(n || '').split(' ')[0].toUpperCase();
@@ -70,27 +74,27 @@ function KpiCard({ kpi, fallbackLabel }) {
   if (!kpi) return null;
   const t = THEME[kpi.theme] || THEME.slate;
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, borderRadius: 24, padding: 15, gap: 9 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <View style={{ width: 30, height: 30, borderRadius: 11, backgroundColor: t.chip, alignItems: 'center', justifyContent: 'center' }}>
+    <View className={`flex-1 rounded-[24px] p-[15px] gap-[9px] ${t.bg}`}>
+      <View className="flex-row items-center justify-between gap-[8px]">
+        <View className={`w-[30px] h-[30px] rounded-[11px] items-center justify-center ${t.chip}`}>
           <Feather name={ICON[kpi.icon] || 'activity'} size={15} color={t.ink} />
         </View>
         {!!kpi.badge && (
-          <Text className="font-sans-semibold" style={{ fontSize: 9.5, color: t.sub, textAlign: 'right', flexShrink: 1 }}>
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={`font-sans-semibold text-[9.5px] text-right shrink ${t.sub}`}>
             {kpi.badge}
           </Text>
         )}
       </View>
       <View>
-        <Text className="font-sans-semibold" style={{ fontSize: 26, lineHeight: 28, letterSpacing: -0.5, color: t.ink }}>
+        <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={`font-sans-semibold text-[26px] leading-[28px] tracking-[-0.5px] ${t.inkText}`}>
           {kpi.value ?? '—'}
         </Text>
-        <Text className="font-sans-semibold" style={{ fontSize: 9.5, letterSpacing: 1, textTransform: 'uppercase', color: t.sub, marginTop: 6 }}>
+        <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={`font-sans-semibold text-[9.5px] tracking-[1px] uppercase mt-[6px] ${t.sub}`}>
           {kpi.label || fallbackLabel}
         </Text>
       </View>
       {!!kpi.displayText && (
-        <Text className="font-sans-medium" style={{ fontSize: 11, lineHeight: 15, color: t.sub }}>{kpi.displayText}</Text>
+        <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={`font-sans-medium text-[11px] leading-[15px] ${t.sub}`}>{kpi.displayText}</Text>
       )}
     </View>
   );
@@ -98,16 +102,16 @@ function KpiCard({ kpi, fallbackLabel }) {
 
 function ChartCard({ title, subtitle, right, children }) {
   return (
-    <View style={{ backgroundColor: C.card, borderRadius: 26, padding: 18, marginBottom: 14, gap: 14 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 15, letterSpacing: -0.2, color: C.ink }}>{title}</Text>
+    <View className="bg-[#ffffff] rounded-[26px] p-[18px] mb-[14px] gap-[14px]">
+      <View className="flex-row items-start justify-between gap-[10px]">
+        <View className="flex-1">
+          <Text className="font-sans-semibold text-[15px] tracking-[-0.2px] text-[#151233]">{title}</Text>
           {!!subtitle && (
-            <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>{subtitle}</Text>
+            <Text className="font-sans-medium text-[11.5px] text-[#6d6a96] mt-[3px]">{subtitle}</Text>
           )}
         </View>
         {!!right && (
-          <Text className="font-sans-semibold" style={{ fontSize: 22, letterSpacing: -0.5, color: C.ink }}>{right}</Text>
+          <Text className="font-sans-semibold text-[22px] tracking-[-0.5px] text-[#151233]">{right}</Text>
         )}
       </View>
       {children}
@@ -117,20 +121,20 @@ function ChartCard({ title, subtitle, right, children }) {
 
 function Empty({ text }) {
   return (
-    <View style={{ backgroundColor: '#f7f6ff', borderRadius: 18, padding: 18 }}>
-      <Text className="font-sans-medium" style={{ fontSize: 11.5, lineHeight: 17, color: C.sub }}>{text}</Text>
+    <View className="bg-[#f7f6ff] rounded-[18px] p-[18px]">
+      <Text className="font-sans-medium text-[11.5px] leading-[17px] text-[#6d6a96]">{text}</Text>
     </View>
   );
 }
 
 function Legend({ items }) {
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, borderTopWidth: 1, borderTopColor: C.grid, paddingTop: 12 }}>
+    <View className="flex-row flex-wrap gap-[14px] border-t border-t-[#f0eefc] pt-[12px]">
       {items.map((l) => (
-        <View key={l.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: l.color }} />
-          <Text className="font-sans-semibold" style={{ fontSize: 11, color: '#3a3670' }}>{l.key}</Text>
-          <Text className="font-sans-medium" style={{ fontSize: 11, color: C.muted }}>{l.n}</Text>
+        <View key={l.key} className="flex-row items-center gap-[6px]">
+          <View className={`w-[9px] h-[9px] rounded-[3px] ${l.swatch}`} />
+          <Text className="font-sans-semibold text-[11px] text-[#3a3670]">{l.key}</Text>
+          <Text className="font-sans-medium text-[11px] text-[#9d9ac0]">{l.n}</Text>
         </View>
       ))}
     </View>
@@ -143,6 +147,10 @@ export default function CustomerAnalytics() {
   const [circuitId, setCircuitId] = useState('ALL');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const { width: windowWidth } = useWindowDimensions();
+  const [contentWidth, setContentWidth] = useState(0);
+  // Measured from the scroll content; window-based until the first layout.
+  const chartWidth = Math.max((contentWidth || windowWidth - 32) - CHART_INSET, 120);
 
   const { data: connectionsData } = useMyConnections();
   const connections = connectionsData?.connections ?? [];
@@ -164,7 +172,7 @@ export default function CustomerAnalytics() {
   }, [connections, query]);
 
   const axis = {
-    width: CHART_WIDTH,
+    width: chartWidth,
     yAxisTextStyle: { color: C.muted, fontSize: 10, fontWeight: '600' },
     xAxisLabelTextStyle: { color: C.muted, fontSize: 9.5, fontWeight: '600' },
     rulesColor: C.grid,
@@ -200,7 +208,7 @@ export default function CustomerAnalytics() {
         : [{ value: 0, color: 'transparent' }],
     };
   });
-  const sevLegend = SEV.map((s) => ({ key: s.key, color: s.color, n: sum(sevRows, (r) => r[s.key] || 0) }));
+  const sevLegend = SEV.map((s) => ({ key: s.key, swatch: s.swatch, n: sum(sevRows, (r) => r[s.key] || 0) }));
   const sevHasData = sevLegend.some((l) => l.n > 0);
 
   const mttrRows = data?.mttrTrend ?? [];
@@ -215,7 +223,7 @@ export default function CustomerAnalytics() {
   const repeatRows = data?.repeatFaultComparison ?? [];
   const repeatKeys = repeatRows.length ? Object.keys(repeatRows[0]).filter((k) => k !== 'name') : [];
   const repeatLegend = repeatKeys.map((k, i) => ({
-    key: k, color: SERIES_COLORS[i % SERIES_COLORS.length], n: sum(repeatRows, (r) => r[k] || 0),
+    key: k, swatch: SERIES_SWATCH[i % SERIES_SWATCH.length], n: sum(repeatRows, (r) => r[k] || 0),
   }));
   const repeatHasData = repeatLegend.some((l) => l.n > 0);
   const repeatMax = intMax(Math.max(0, ...repeatRows.flatMap((r) => repeatKeys.map((k) => r[k] || 0))));
@@ -229,32 +237,29 @@ export default function CustomerAnalytics() {
     })));
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <Screen className="bg-[#f3f2fd]">
       {/* header */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20,
-        backgroundColor: C.bg, paddingTop: Platform.OS === 'ios' ? 58 : 42, paddingBottom: 14,
-      }}>
+      <View className="flex-row items-center gap-[12px] px-[16px] std:px-[20px] bg-[#f3f2fd] pt-[10px] pb-[14px]">
         <Pressable
           onPress={() => back()}
           hitSlop={15}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' }}
+          className="w-[40px] h-[40px] rounded-[20px] bg-[#ffffff] items-center justify-center"
         >
           <Feather name="chevron-left" size={20} color={C.ink} />
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: C.sub }}>
+        <View className="flex-1">
+          <Text className="font-sans-semibold text-[10px] tracking-[1.2px] uppercase text-[#6d6a96]">
             {isAll ? `${totalCircuits} links · fleet rollup` : (selected?.customerName || 'Connection')}
           </Text>
-          <Text className="font-sans-semibold" style={{ fontSize: 16, letterSpacing: -0.2, color: C.ink }} numberOfLines={1}>
+          <Text className="font-sans-semibold text-[16px] tracking-[-0.2px] text-[#151233]" numberOfLines={1}>
             {isAll ? 'All connections' : (selected?.fabCircuitId || circuitId)}
           </Text>
         </View>
       </View>
 
       {/* scope switch */}
-      <View style={{ paddingHorizontal: 16, gap: 10 }}>
-        <View style={{ flexDirection: 'row', gap: 4, backgroundColor: C.card, borderRadius: 999, padding: 5 }}>
+      <View className="px-[12px] std:px-[16px] gap-[10px]">
+        <View className="flex-row gap-[4px] bg-[#ffffff] rounded-[999px] p-[5px]">
           {[{ key: 'ALL', label: 'All connections' }, { key: 'ONE', label: 'Single link' }].map((s) => {
             const on = s.key === 'ALL' ? isAll : !isAll;
             return (
@@ -268,12 +273,9 @@ export default function CustomerAnalytics() {
                     setPickerOpen(true);
                   }
                 }}
-                style={{
-                  flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 999,
-                  paddingVertical: 10, minHeight: 40, backgroundColor: on ? C.dark : 'transparent',
-                }}
+                className={`flex-1 items-center justify-center rounded-[999px] py-[10px] min-h-[40px] ${on ? 'bg-[#151233]' : 'bg-transparent'}`}
               >
-                <Text className="font-sans-semibold" style={{ fontSize: 12, color: on ? '#f3f2fd' : C.sub }}>{s.label}</Text>
+                <Text className={`font-sans-semibold text-[12px] ${on ? 'text-[#f3f2fd]' : 'text-[#6d6a96]'}`}>{s.label}</Text>
               </Pressable>
             );
           })}
@@ -282,53 +284,46 @@ export default function CustomerAnalytics() {
         {!isAll && (
           <Pressable
             onPress={() => { setQuery(''); setPickerOpen(true); }}
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card,
-              borderRadius: 20, padding: 13, minHeight: 56,
-            }}
+            className="flex-row items-center gap-[12px] bg-[#ffffff] rounded-[20px] p-[13px] min-h-[56px]"
           >
-            <View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: C.violetSoft, alignItems: 'center', justifyContent: 'center' }}>
+            <View className="w-[34px] h-[34px] rounded-[12px] bg-[#ebe8ff] items-center justify-center">
               <Feather name="git-branch" size={16} color={C.violetDeep} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.ink }} numberOfLines={1}>
+            <View className="flex-1">
+              <Text className="font-sans-semibold text-[12.5px] text-[#151233]" numberOfLines={1}>
                 {selected?.fabCircuitId || circuitId}
               </Text>
-              <Text className="font-sans-medium" style={{ fontSize: 11, color: C.sub, marginTop: 2 }} numberOfLines={1}>
+              <Text className="font-sans-medium text-[11px] text-[#6d6a96] mt-[2px]" numberOfLines={1}>
                 {selected?.customerName || 'Selected connection'}
               </Text>
             </View>
-            <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.violetDeep }}>Change</Text>
+            <Text className="font-sans-semibold text-[11px] text-[#4a34c7]">Change</Text>
           </Pressable>
         )}
       </View>
 
       {isLoading && (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={C.violet} />
-          <Text className="font-sans-semibold" style={{ color: C.sub, marginTop: 14 }}>Crunching data…</Text>
+          <Text className="font-sans-semibold text-[#6d6a96] mt-[14px]">Crunching data…</Text>
         </View>
       )}
 
       {isError && !isLoading && (
-        <View style={{ padding: 16 }}>
+        <View className="p-[12px] std:p-[16px]">
           <Empty text="We could not load metrics for this selection. Pull back and try again." />
         </View>
       )}
 
       {data && !isLoading && !isError && (
-        <ScrollView
-          style={{ flex: 1, paddingHorizontal: 16, paddingTop: 14 }}
-          contentContainerStyle={{ paddingBottom: 160 }}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScreenScrollView className="flex-1 px-[12px] std:px-[16px] pt-[14px]">
           {/* KPI grid */}
-          <View style={{ gap: 11, marginBottom: 14 }}>
-            <View style={{ flexDirection: 'row', gap: 11 }}>
+          <View className="gap-[11px] mb-[14px]" onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}>
+            <View className="flex-row gap-[11px]">
               <KpiCard kpi={data.kpiHighlights?.uptimeDelta} fallbackLabel="Uptime" />
               <KpiCard kpi={data.kpiHighlights?.mttrReduction} fallbackLabel="MTTR" />
             </View>
-            <View style={{ flexDirection: 'row', gap: 11 }}>
+            <View className="flex-row gap-[11px]">
               <KpiCard kpi={data.kpiHighlights?.zeroCoreOutage} fallbackLabel="Core outage" />
               <KpiCard kpi={data.kpiHighlights?.repeatFaultReduction} fallbackLabel="Repeat faults" />
             </View>
@@ -363,9 +358,9 @@ export default function CustomerAnalytics() {
                   referenceLine1Config={{ color: C.coral, dashWidth: 5, dashGap: 5, thickness: 1.5 }}
                 />
                 {uptimeBase < SLA_FLOOR && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, borderTopWidth: 1, borderTopColor: C.grid, paddingTop: 12 }}>
-                    <View style={{ width: 16, height: 2, borderRadius: 999, backgroundColor: C.coral }} />
-                    <Text className="font-sans-semibold" style={{ fontSize: 10.5, color: C.sub }}>{SLA_FLOOR}% SLA floor</Text>
+                  <View className="flex-row items-center gap-[7px] border-t border-t-[#f0eefc] pt-[12px]">
+                    <View className="w-[16px] h-[2px] rounded-[999px] bg-[#ff6b57]" />
+                    <Text className="font-sans-semibold text-[10.5px] text-[#6d6a96]">{SLA_FLOOR}% SLA floor</Text>
                   </View>
                 )}
               </>
@@ -419,7 +414,7 @@ export default function CustomerAnalytics() {
           {/* categories */}
           <ChartCard title="Fault categories" subtitle={catTotal ? `${catTotal} fault${catTotal > 1 ? 's' : ''} classified` : 'Nothing classified yet'}>
             {cats.length > 0 ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <View className="flex-row items-center gap-[16px]">
                 <PieChart
                   data={cats.map((d, i) => ({ value: d.value, color: SERIES_COLORS[i % SERIES_COLORS.length] }))}
                   donut
@@ -427,20 +422,20 @@ export default function CustomerAnalytics() {
                   innerRadius={42}
                   innerCircleColor={C.card}
                   centerLabelComponent={() => (
-                    <View style={{ alignItems: 'center' }}>
-                      <Text className="font-sans-semibold" style={{ fontSize: 24, color: C.ink }}>{catTotal}</Text>
-                      <Text className="font-sans-semibold" style={{ fontSize: 8.5, letterSpacing: 1, textTransform: 'uppercase', color: C.muted, marginTop: 2 }}>
+                    <View className="items-center">
+                      <Text className="font-sans-semibold text-[24px] text-[#151233]">{catTotal}</Text>
+                      <Text className="font-sans-semibold text-[8.5px] tracking-[1px] uppercase text-[#9d9ac0] mt-[2px]">
                         Faults
                       </Text>
                     </View>
                   )}
                 />
-                <View style={{ flex: 1, gap: 9 }}>
+                <View className="flex-1 gap-[9px]">
                   {cats.map((d, i) => (
-                    <View key={d.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }} />
-                      <Text className="font-sans-semibold" style={{ flex: 1, fontSize: 11.5, color: C.ink }} numberOfLines={1}>{d.name}</Text>
-                      <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.sub }}>
+                    <View key={d.name} className="flex-row items-center gap-[8px]">
+                      <View className={`w-[9px] h-[9px] rounded-[3px] ${SERIES_SWATCH[i % SERIES_SWATCH.length]}`} />
+                      <Text className="font-sans-semibold flex-1 text-[11.5px] text-[#151233]" numberOfLines={1}>{d.name}</Text>
+                      <Text className="font-sans-semibold text-[11px] text-[#6d6a96]">
                         {Math.round((d.value / (catTotal || 1)) * 100)}%
                       </Text>
                     </View>
@@ -501,14 +496,18 @@ export default function CustomerAnalytics() {
               <Empty text="Nothing has recurred on this selection — every fault type sits at zero." />
             )}
           </ChartCard>
-        </ScrollView>
+        </ScreenScrollView>
       )}
 
       {/* searchable circuit picker — scales from 1 to hundreds of links */}
-      <Modal visible={pickerOpen} animationType="slide" transparent onRequestClose={() => setPickerOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(21,18,51,0.35)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: C.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28, maxHeight: '78%' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f7f6ff', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 11 }}>
+      <Sheet
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        maxHeightRatio={0.78}
+        backdropClassName="bg-[rgba(21,18,51,0.35)]"
+        className="bg-[#ffffff] rounded-tl-[28px] rounded-tr-[28px] px-[12px] std:px-[16px] pt-[16px] pb-[12px]"
+      >
+            <View className="flex-row items-center gap-[10px] bg-[#f7f6ff] rounded-[999px] px-[14px] py-[11px]">
               <Feather name="search" size={16} color={C.muted} />
               <TextInput
                 value={query}
@@ -516,14 +515,14 @@ export default function CustomerAnalytics() {
                 placeholder="Search by circuit ID, customer or site"
                 placeholderTextColor={C.muted}
                 autoCorrect={false}
-                style={{ flex: 1, fontSize: 12.5, color: C.ink, padding: 0 }}
+                className="flex-1 text-[12.5px] text-[#151233] p-0"
               />
               <Pressable onPress={() => setPickerOpen(false)} hitSlop={10}>
-                <Text className="font-sans-semibold" style={{ fontSize: 11.5, color: C.violetDeep }}>Done</Text>
+                <Text className="font-sans-semibold text-[11.5px] text-[#4a34c7]">Done</Text>
               </Pressable>
             </View>
 
-            <Text className="font-sans-semibold" style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: C.muted, marginTop: 14, marginBottom: 6 }}>
+            <Text className="font-sans-semibold text-[10px] tracking-[1px] uppercase text-[#9d9ac0] mt-[14px] mb-[6px]">
               {hits.length > MAX_ROWS
                 ? `Showing ${MAX_ROWS} of ${hits.length} · keep typing to narrow`
                 : `${hits.length} of ${totalCircuits} links`}
@@ -534,7 +533,7 @@ export default function CustomerAnalytics() {
               keyExtractor={(c, i) => String(c?.id || c?.fabCircuitId || i)}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={(
-                <Text className="font-sans-medium" style={{ fontSize: 12, color: C.muted, textAlign: 'center', paddingVertical: 24 }}>
+                <Text className="font-sans-medium text-[12px] text-[#9d9ac0] text-center py-[24px]">
                   No link matches that search.
                 </Text>
               )}
@@ -543,16 +542,13 @@ export default function CustomerAnalytics() {
                 return (
                   <Pressable
                     onPress={() => { setCircuitId(item?.fabCircuitId); setPickerOpen(false); }}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10,
-                      paddingVertical: 11, minHeight: 48, borderRadius: 14, backgroundColor: on ? C.bg : C.card,
-                    }}
+                    className={`flex-row items-center gap-[10px] px-[10px] py-[11px] min-h-[48px] rounded-[14px] ${on ? 'bg-[#f3f2fd]' : 'bg-[#ffffff]'}`}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text className="font-sans-semibold" style={{ fontSize: 11.5, color: C.ink }} numberOfLines={1}>
+                    <View className="flex-1">
+                      <Text className="font-sans-semibold text-[11.5px] text-[#151233]" numberOfLines={1}>
                         {item?.fabCircuitId || 'Unknown'}
                       </Text>
-                      <Text className="font-sans-medium" style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }} numberOfLines={1}>
+                      <Text className="font-sans-medium text-[10.5px] text-[#6d6a96] mt-[2px]" numberOfLines={1}>
                         {item?.customerName || item?.siteName || item?.location || '—'}
                       </Text>
                     </View>
@@ -561,9 +557,7 @@ export default function CustomerAnalytics() {
                 );
               }}
             />
-          </View>
-        </View>
-      </Modal>
-    </View>
+      </Sheet>
+    </Screen>
   );
 }

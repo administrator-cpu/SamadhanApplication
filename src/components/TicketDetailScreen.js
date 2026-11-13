@@ -11,11 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Keyboard,
-  KeyboardAvoidingView,
   Linking,
-  Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,13 +27,15 @@ import {
 //   State,
 //   TapGestureHandler,
 // } from 'react-native-gesture-handler';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller';
+import { BottomInset, TopInset } from './layout/Screen';
+import Sheet from './layout/Sheet';
 
 import { useTicket } from '../hooks/useTickets';
 import { useTicketSocket } from '../hooks/useTicketSocket';
 import { useAuthStore } from '../store/authStore';
 import { getEventConfig } from '../utils/eventType';
-import { STATUS_DOT_COLORS, statusLabel } from '../utils/ticketStatus';
+import { STATUS_DOT_CLASSES, statusLabel } from '../utils/ticketStatus';
 import TicketRating from './TicketRating';
 import TicketReplyForm from './TicketReplyForm';
 import TicketStaffTools from './TicketStaffTools';
@@ -82,21 +80,6 @@ const GRADIENT = {
   done: ['#FFFFFF', '#F5FBF8', '#E8F5EF'],
 };
 
-const SHADOW_CARD = {
-  shadowColor: '#1C365C',
-  shadowOpacity: 0.07,
-  shadowRadius: 20,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 3,
-};
-
-const SHADOW_FLOAT = {
-  shadowColor: '#1C365C',
-  shadowOpacity: 0.09,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 5 },
-  elevation: 5,
-};
 
 const CHAT_EVENT_TYPES = [
   'TICKET_CREATED',
@@ -232,12 +215,14 @@ function getTone(status) {
       closed: true,
       ground: GRADIENT.done,
       accent: C.green,
-      accentInk: C.greenInk,
-      accentTint: C.greenTint,
-      bubble: C.bubbleGreen,
-      bubbleMeta: C.bubbleGreenMeta,
+      accentText: 'text-[#188A62]',
+      accentBg: 'bg-[#188A62]',
+      accentInkText: 'text-[#1E6B50]',
+      accentTintBg: 'bg-[#DFF3EA]',
+      bubbleBg: 'bg-[#DDEFE7]',
+      bubbleMetaText: 'text-[#6E9384]',
       headline: 'All fixed',
-      pillText: C.greenInk,
+      pillText: 'text-[#1E6B50]',
     };
   }
   if (s === 'ESCALATED') {
@@ -246,12 +231,14 @@ function getTone(status) {
       closed: false,
       ground: GRADIENT.live,
       accent: C.danger,
-      accentInk: '#96271B',
-      accentTint: C.dangerTint,
-      bubble: C.bubbleBlue,
-      bubbleMeta: C.bubbleBlueMeta,
+      accentText: 'text-[#C0392B]',
+      accentBg: 'bg-[#C0392B]',
+      accentInkText: 'text-[#96271B]',
+      accentTintBg: 'bg-[#FDECEA]',
+      bubbleBg: 'bg-[#DCEBFC]',
+      bubbleMetaText: 'text-[#6D8CB4]',
       headline: 'Escalated to our\nsenior engineers',
-      pillText: '#96271B',
+      pillText: 'text-[#96271B]',
     };
   }
   if (s === 'IN_PROGRESS' || s === 'REOPENED') {
@@ -260,12 +247,14 @@ function getTone(status) {
       closed: false,
       ground: GRADIENT.live,
       accent: C.blue,
-      accentInk: C.blueInk,
-      accentTint: C.blueTint,
-      bubble: C.bubbleBlue,
-      bubbleMeta: C.bubbleBlueMeta,
+      accentText: 'text-[#1B72E8]',
+      accentBg: 'bg-[#1B72E8]',
+      accentInkText: 'text-[#1B5FC0]',
+      accentTintBg: 'bg-[#EAF2FE]',
+      bubbleBg: 'bg-[#DCEBFC]',
+      bubbleMetaText: 'text-[#6D8CB4]',
       headline: "We're on it,\nnothing needed from you",
-      pillText: C.blueDeep,
+      pillText: 'text-[#2C5FA8]',
     };
   }
   return {
@@ -273,12 +262,14 @@ function getTone(status) {
     closed: false,
     ground: GRADIENT.live,
     accent: C.blue,
-    accentInk: C.blueInk,
-    accentTint: C.blueTint,
-    bubble: C.bubbleBlue,
-    bubbleMeta: C.bubbleBlueMeta,
+    accentText: 'text-[#1B72E8]',
+    accentBg: 'bg-[#1B72E8]',
+    accentInkText: 'text-[#1B5FC0]',
+    accentTintBg: 'bg-[#EAF2FE]',
+    bubbleBg: 'bg-[#DCEBFC]',
+    bubbleMetaText: 'text-[#6D8CB4]',
     headline: "We've got your\nreport",
-    pillText: C.blueDeep,
+    pillText: 'text-[#2C5FA8]',
   };
 }
 
@@ -348,14 +339,13 @@ export default function TicketDetailScreen() {
   const navigation = useNavigation();
   const { data, isLoading, isError, error, refetch, isRefetching } = useTicket(id);
   const user = useAuthStore((state) => state.user);
-  const insets = useSafeAreaInsets();
   useTicketSocket(id);
 
   const [isMenuVisible, setMenuVisible] = useState(false);
   const [isDetailsVisible, setDetailsVisible] = useState(false);
   const [isRcaVisible, setRcaVisible] = useState(false);
   const [isRcaDismissed, setRcaDismissed] = useState(false);
-  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const scrollViewRef = useRef(null);
   const scrollToBottom = (animated = true) => scrollViewRef.current?.scrollToEnd({ animated });
 
@@ -368,18 +358,8 @@ export default function TicketDetailScreen() {
   }, [navigation]);
 
   useEffect(() => {
-    const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
-    const hideEvent = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
-    const showSub = Keyboard.addListener(showEvent, () => {
-      setKeyboardVisible(true);
-      requestAnimationFrame(() => scrollToBottom(true));
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+    if (isKeyboardVisible) requestAnimationFrame(() => scrollToBottom(true));
+  }, [isKeyboardVisible]);
 
   const ticket = data?.ticket;
   const events = data?.events;
@@ -399,9 +379,9 @@ export default function TicketDetailScreen() {
   if (isLoading) {
     return (
       <Ground colors={GRADIENT.live}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={C.blue} />
-          <Text className="font-sans-medium" style={{ fontSize: 13, color: C.muted, marginTop: 14 }}>
+          <Text className="font-sans-medium text-[13px] text-[#5C7291] mt-[14px]">
             Loading your conversation…
           </Text>
         </View>
@@ -412,37 +392,27 @@ export default function TicketDetailScreen() {
   if (isError) {
     return (
       <Ground colors={GRADIENT.live}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 }}>
+        <View className="flex-1 items-center justify-center p-[30px]">
           <View
-            style={{
-              width: 62,
-              height: 62,
-              borderRadius: 20,
-              backgroundColor: C.dangerTint,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 20,
-            }}
+            className="w-[62px] h-[62px] rounded-[20px] bg-[#FDECEA] items-center justify-center mb-[20px]"
           >
             <Feather name="wifi-off" size={26} color={C.danger} />
           </View>
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: 20, letterSpacing: -0.4, color: C.ink, marginBottom: 8, textAlign: 'center' }}
+            className="font-sans-semibold text-[20px] tracking-[-0.4px] text-[#0C1524] mb-[8px] text-center"
           >
             We couldn't load this chat
           </Text>
           <Text
-            className="font-sans-medium"
-            style={{ fontSize: 13.5, lineHeight: 21, color: C.muted, textAlign: 'center', marginBottom: 26 }}
+            className="font-sans-medium text-[13.5px] leading-[21px] text-[#5C7291] text-center mb-[26px]"
           >
             {error?.message || 'Your ticket is safe — this is just a connection hiccup.'}
           </Text>
           <Pressable
             onPress={() => refetch()}
-            style={{ backgroundColor: C.ink, paddingHorizontal: 28, height: 50, borderRadius: 999, justifyContent: 'center' }}
+            className="bg-[#0C1524] px-[28px] h-[50px] rounded-[999px] justify-center"
           >
-            <Text className="font-sans-semibold" style={{ fontSize: 15, color: '#FFFFFF' }}>
+            <Text className="font-sans-semibold text-[15px] text-[#FFFFFF]">
               Try again
             </Text>
           </Pressable>
@@ -499,63 +469,28 @@ export default function TicketDetailScreen() {
 
   return (
     <Ground colors={tone.ground}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
+      <KeyboardAvoidingView className="flex-1" behavior="padding">
         {/* FLOATING CHROME — the only pinned elements */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingTop: insets.top + 8,
-            paddingHorizontal: 14,
-            paddingBottom: 2,
-          }}
-        >
+        <TopInset extra={8} className="flex-row items-center justify-between px-[14px] pb-[2px]">
           <RoundButton icon="arrow-left" onPress={() => router.back()} />
 
           {/* IDENTITY PILL — who + which ticket, opens the details sheet */}
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setDetailsVisible(true)}
-            style={[
-              {
-                flex: 1,
-                marginHorizontal: 9,
-                height: 52,
-                borderRadius: 999,
-                backgroundColor: C.surface,
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingLeft: 7,
-                paddingRight: 12,
-                gap: 10,
-              },
-              SHADOW_FLOAT,
-            ]}
+            className="flex-1 mx-[9px] h-[52px] rounded-[999px] bg-[#FFFFFF] flex-row items-center pl-[7px] pr-[12px] gap-[10px]"
+            style={sx.shadowFloat}
           >
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 999,
-                backgroundColor: tone.accentTint,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text className="font-sans-semibold" style={{ fontSize: 13, color: tone.accentInk }}>
+            <View className={`w-[38px] h-[38px] rounded-[999px] items-center justify-center ${tone.accentTintBg}`}>
+              <Text className={`font-sans-semibold text-[13px] ${tone.accentInkText}`}>
                 {getInitials(partnerName)}
               </Text>
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text numberOfLines={1} className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+            <View className="flex-1 min-w-0">
+              <Text numberOfLines={1} className="font-sans-semibold text-[13px] text-[#0C1524]">
                 {partnerName}
               </Text>
-              <Text numberOfLines={1} className="font-sans-medium" style={{ fontSize: 11, color: C.soft, marginTop: 2 }}>
+              <Text numberOfLines={1} className="font-sans-medium text-[11px] text-[#6B7A93] mt-[2px]">
                 {[`#${ticket?.ticket_no || '—'}`, statusLabel(ticket?.status), !isCurrentUserCustomer && ticket?.priority]
                   .filter(Boolean)
                   .join(' · ')}
@@ -572,74 +507,57 @@ export default function TicketDetailScreen() {
             />
           )}
           <RoundButton icon="more-vertical" onPress={() => setMenuVisible(true)} />
-        </View>
+        </TopInset>
 
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12 }}
+          className="flex-1"
+          contentContainerClassName="px-[12px] std:px-[16px] pt-[18px] pb-[12px]"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollToBottom(true)}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={tone.accent} />}
         >
           {/* HEADLINE — scrolls away with the thread */}
-          <View style={{ alignItems: 'center', paddingHorizontal: 6, paddingBottom: 6 }}>
+          <View className="items-center px-[6px] pb-[6px]">
             <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 7,
-                backgroundColor: 'rgba(255,255,255,0.72)',
-                borderRadius: 999,
-                paddingHorizontal: 13,
-                paddingVertical: 6,
-              }}
+              className="flex-row items-center gap-[7px] bg-[rgba(255,255,255,0.72)] rounded-[999px] px-[13px] py-[6px]"
             >
               {tone.closed ? (
                 <Feather name="check" size={12} color={C.green} />
               ) : (
-                <LivePulse color={tone.accent} />
+                <LivePulse color={tone.accent} dotClass={tone.accentBg} />
               )}
-              <Text className="font-sans-semibold" style={{ fontSize: 11.5, color: tone.pillText }}>
+              <Text className={`font-sans-semibold text-[11.5px] ${tone.pillText}`}>
                 {statusPill}
               </Text>
             </View>
 
             <Text
-              className="font-sans-semibold"
-              style={{
-                fontSize: 27,
-                lineHeight: 32,
-                letterSpacing: -0.8,
-                color: C.ink,
-                textAlign: 'center',
-                marginTop: 13,
-              }}
+              className="font-sans-semibold text-[27px] leading-[32px] tracking-[-0.8px] text-[#0C1524] text-center mt-[13px]"
             >
               {tone.headline}
             </Text>
 
             <Text
-              className="font-sans-medium"
-              style={{ fontSize: 13, lineHeight: 19.5, color: C.muted, textAlign: 'center', marginTop: 9 }}
+              className="font-sans-medium text-[13px] leading-[19.5px] text-[#5C7291] text-center mt-[9px]"
             >
               {subline}
             </Text>
           </View>
 
           {/* TWO-UP STATS */}
-          <View style={{ flexDirection: 'row', gap: 11, marginTop: 18, marginBottom: 13 }}>
+          <View className="flex-row gap-[11px] mt-[18px] mb-[13px]">
             <StatTile
               icon="wifi"
-              tint={C.blueTint}
+              tint="bg-[#EAF2FE]"
               iconColor={C.blue}
               title="Your line"
               value={ticket?.circuit_description || 'Not specified'}
             />
             <StatTile
               icon="clock"
-              tint={C.amberTint}
+              tint="bg-[#FEF1E7]"
               iconColor={C.amber}
               title="Reported"
               value={stampPhrase(ticket?.created_at)}
@@ -648,13 +566,13 @@ export default function TicketDetailScreen() {
 
           {/* WHAT HAPPENS NEXT — live tickets only */}
           {!tone.closed ? (
-            <StepsCard steps={getSteps(ticket?.status, isCurrentUserCustomer ? agentName : null)} accent={tone.accent} />
+            <StepsCard steps={getSteps(ticket?.status, isCurrentUserCustomer ? agentName : null)} accentText={tone.accentText} accentBg={tone.accentBg} />
           ) : null}
 
           {/* THREAD */}
           {timeline.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-              <Text className="font-sans-medium" style={{ fontSize: 13.5, color: C.faint }}>
+            <View className="items-center py-[30px]">
+              <Text className="font-sans-medium text-[13.5px] text-[#8397B0]">
                 No messages yet — say hello below.
               </Text>
             </View>
@@ -681,14 +599,7 @@ export default function TicketDetailScreen() {
         </ScrollView>
 
         {/* FLOATING COMPOSER / RCA PROMPT / CLOSED CARD */}
-        <View
-          style={{
-            paddingHorizontal: 16,
-            paddingTop: 6,
-            paddingBottom: isKeyboardVisible ? 8 : insets.bottom + 8,
-            gap: 11,
-          }}
-        >
+        <BottomInset extra={8} keyboardAware className="px-[12px] std:px-[16px] pt-[6px] gap-[11px]">
           {/* Resolved or closed + staff + no RCA yet → write it right here */}
           {tone.closed && isStaff && !ticket?.rca && !isRcaDismissed && !isKeyboardVisible ? (
             <RcaPrompt onWrite={() => setRcaVisible(true)} onLater={() => setRcaDismissed(true)} />
@@ -697,91 +608,75 @@ export default function TicketDetailScreen() {
           {tone.closed && !isStaff ? (
             <ClosedCard onReopen={() => setMenuVisible(true)} />
           ) : (
-            <View style={[{ backgroundColor: C.surface, borderRadius: 26, paddingHorizontal: 6, paddingVertical: 4 }, SHADOW_FLOAT]}>
+            <View className="bg-[#FFFFFF] rounded-[26px] px-[6px] py-[4px]" style={sx.shadowFloat}>
               <TicketReplyForm ticket={ticket} />
             </View>
           )}
-        </View>
+        </BottomInset>
       </KeyboardAvoidingView>
 
       {/* MANAGE SHEET */}
-      <Modal visible={isMenuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(12,21,36,0.38)', justifyContent: 'flex-end' }}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{
-              backgroundColor: C.surface,
-              borderTopLeftRadius: 30,
-              borderTopRightRadius: 30,
-              paddingHorizontal: 18,
-              paddingTop: 12,
-              paddingBottom: insets.bottom + 26,
-              maxHeight: '82%',
-            }}
-          >
+      <Sheet
+        visible={isMenuVisible}
+        onClose={() => setMenuVisible(false)}
+        animationType="fade"
+        maxHeightRatio={0.82}
+        backdropClassName="bg-[rgba(12,21,36,0.38)]"
+        className="bg-[#FFFFFF] rounded-tl-[30px] rounded-tr-[30px] px-[18px] pt-[12px] pb-[26px]"
+      >
             <View
-              style={{ width: 40, height: 4, borderRadius: 999, backgroundColor: '#DEE5EE', alignSelf: 'center', marginBottom: 18 }}
+              className="w-[40px] h-[4px] rounded-[999px] bg-[#DEE5EE] self-center mb-[18px]"
             />
-            <Text className="font-sans-semibold" style={{ fontSize: 16, letterSpacing: -0.3, color: C.ink, textAlign: 'center' }}>
+            <Text className="font-sans-semibold text-[16px] tracking-[-0.3px] text-[#0C1524] text-center">
               What would you like to do?
             </Text>
-            <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, textAlign: 'center', marginTop: 5, marginBottom: 18 }}>
+            <Text className="font-sans-medium text-[12.5px] text-[#5C7291] text-center mt-[5px] mb-[18px]">
               Nothing here sends a message on its own.
             </Text>
 
             <TicketStatusActions ticket={ticket} />
             <TicketStaffTools ticket={ticket} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
 
       {/* DETAILS SHEET */}
-      <Modal visible={isDetailsVisible} transparent animationType="fade" onRequestClose={() => setDetailsVisible(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(12,21,36,0.38)', justifyContent: 'center', padding: 18 }}>
-          <View style={{ backgroundColor: C.surface, borderRadius: 30, padding: 22, maxHeight: '86%' }}>
+      <Sheet
+        visible={isDetailsVisible}
+        onClose={() => setDetailsVisible(false)}
+        variant="center"
+        keyboard={false}
+        dismissOnBackdrop={false}
+        backdropClassName="bg-[rgba(12,21,36,0.38)]"
+        className="bg-[#FFFFFF] rounded-[30px] p-[22px]"
+      >
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => setDetailsVisible(false)}
-              style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+              className="absolute top-[12px] right-[12px] w-[44px] h-[44px] items-center justify-center z-[10]"
             >
               <View
-                style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: C.chipGrey, alignItems: 'center', justifyContent: 'center' }}
+                className="w-[32px] h-[32px] rounded-[999px] bg-[#F2F5F9] items-center justify-center"
               >
                 <Feather name="x" size={16} color={C.body} />
               </View>
             </TouchableOpacity>
 
-            <View style={{ alignItems: 'center', paddingTop: 8 }}>
-              <View
-                style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: 26,
-                  backgroundColor: tone.accentTint,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text className="font-sans-semibold" style={{ fontSize: 24, color: tone.accentInk }}>
+            <View className="items-center pt-[8px]">
+              <View className={`w-[76px] h-[76px] rounded-[26px] items-center justify-center ${tone.accentTintBg}`}>
+                <Text className={`font-sans-semibold text-[24px] ${tone.accentInkText}`}>
                   {getInitials(partnerName)}
                 </Text>
               </View>
               <Text
-                className="font-sans-semibold"
-                style={{ fontSize: 20, letterSpacing: -0.4, color: C.ink, marginTop: 14, textAlign: 'center' }}
+                className="font-sans-semibold text-[20px] tracking-[-0.4px] text-[#0C1524] mt-[14px] text-center"
               >
                 {partnerName}
               </Text>
-              <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
+              <Text className="font-sans-medium text-[12.5px] text-[#5C7291] mt-[4px]">
                 {isCurrentUserCustomer ? contactPerson?.role || 'Your support agent' : `Ticket #${ticket?.ticket_no || '—'}`}
               </Text>
             </View>
 
-            <ScrollView style={{ flexShrink: 1, marginVertical: 18 }} showsVerticalScrollIndicator={false}>
+            <ScrollView className="shrink my-[18px]" showsVerticalScrollIndicator={false}>
               {contactRows.length > 0 ? (
                 <>
                   <SheetLabel>Reach them directly</SheetLabel>
@@ -798,7 +693,7 @@ export default function TicketDetailScreen() {
                 </>
               ) : null}
 
-              <SheetLabel style={{ marginTop: contactRows.length ? 20 : 0 }}>This ticket</SheetLabel>
+              <SheetLabel className={contactRows.length ? 'mt-[20px]' : 'mt-0'}>This ticket</SheetLabel>
               <InfoGroup>
                 {ticketInfoRows.map((row, index) => (
                   <InfoRow key={row.label} row={row} first={index === 0} status={ticket?.status} />
@@ -807,29 +702,21 @@ export default function TicketDetailScreen() {
 
               {!isCurrentUserCustomer ? (
                 <>
-                  <SheetLabel style={{ marginTop: 20 }}>Assigned agent</SheetLabel>
+                  <SheetLabel className="mt-[20px]">Assigned agent</SheetLabel>
                   <InfoGroup>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13 }}>
+                    <View className="flex-row items-center py-[13px]">
                       <View
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 15,
-                          backgroundColor: C.blueTint,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: 12,
-                        }}
+                        className="w-[44px] h-[44px] rounded-[15px] bg-[#EAF2FE] items-center justify-center mr-[12px]"
                       >
-                        <Text className="font-sans-semibold" style={{ fontSize: 14.5, color: C.blueInk }}>
+                        <Text className="font-sans-semibold text-[14.5px] text-[#1B5FC0]">
                           {getInitials(agentName)}
                         </Text>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text numberOfLines={1} className="font-sans-semibold" style={{ fontSize: 14, color: C.ink }}>
+                      <View className="flex-1">
+                        <Text numberOfLines={1} className="font-sans-semibold text-[14px] text-[#0C1524]">
                           {agentName}
                         </Text>
-                        <Text numberOfLines={1} className="font-sans-medium" style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                        <Text numberOfLines={1} className="font-sans-medium text-[12px] text-[#5C7291] mt-[2px]">
                           {ticket?.assigned_employee?.role || 'Support agent'}
                         </Text>
                       </View>
@@ -841,40 +728,25 @@ export default function TicketDetailScreen() {
               {/* RCA — second entry point, reachable after dismissing the prompt */}
               {isStaff && tone.closed ? (
                 <>
-                  <SheetLabel style={{ marginTop: 20 }}>Root cause analysis</SheetLabel>
+                  <SheetLabel className="mt-[20px]">Root cause analysis</SheetLabel>
                   <TouchableOpacity
                     activeOpacity={0.85}
                     onPress={() => {
                       setDetailsVisible(false);
                       setRcaVisible(true);
                     }}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                      backgroundColor: C.amberTint,
-                      borderRadius: 20,
-                      paddingHorizontal: 16,
-                      paddingVertical: 15,
-                    }}
+                    className="flex-row items-center gap-[12px] bg-[#FEF1E7] rounded-[20px] px-[12px] std:px-[16px] py-[15px]"
                   >
                     <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 12,
-                        backgroundColor: '#FBE4D2',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
+                      className="w-[36px] h-[36px] rounded-[12px] bg-[#FBE4D2] items-center justify-center"
                     >
                       <Feather name="edit-3" size={16} color={C.amber} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.ink }}>
+                    <View className="flex-1">
+                      <Text className="font-sans-semibold text-[12.5px] text-[#0C1524]">
                         {ticket?.rca ? 'Edit the analysis' : 'Write the analysis'}
                       </Text>
-                      <Text className="font-sans-medium" style={{ fontSize: 11.5, color: '#8A6A52', marginTop: 2 }}>
+                      <Text className="font-sans-medium text-[11.5px] text-[#8A6A52] mt-[2px]">
                         {ticket?.rca ? 'Written · visible to the customer' : 'Not written yet'}
                       </Text>
                     </View>
@@ -887,68 +759,53 @@ export default function TicketDetailScreen() {
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => setDetailsVisible(false)}
-              style={{ backgroundColor: C.ink, borderRadius: 999, height: 50, alignItems: 'center', justifyContent: 'center' }}
+              className="bg-[#0C1524] rounded-[999px] h-[50px] items-center justify-center"
             >
-              <Text className="font-sans-semibold" style={{ fontSize: 15, color: '#FFFFFF' }}>
+              <Text className="font-sans-semibold text-[15px] text-[#FFFFFF]">
                 Back to chat
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      </Sheet>
 
       {/* RCA SHEET — agent and admin, on a resolved or closed ticket */}
-      <Modal visible={isRcaVisible} transparent animationType="fade" onRequestClose={() => setRcaVisible(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(12,21,36,0.38)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: C.surface,
-              borderTopLeftRadius: 30,
-              borderTopRightRadius: 30,
-              paddingHorizontal: 18,
-              paddingTop: 12,
-              paddingBottom: insets.bottom + 20,
-              maxHeight: '88%',
-            }}
-          >
+      <Sheet
+        visible={isRcaVisible}
+        onClose={() => setRcaVisible(false)}
+        animationType="fade"
+        dismissOnBackdrop={false}
+        maxHeightRatio={0.88}
+        backdropClassName="bg-[rgba(12,21,36,0.38)]"
+        className="bg-[#FFFFFF] rounded-tl-[30px] rounded-tr-[30px] px-[18px] pt-[12px] pb-[20px]"
+      >
             <View
-              style={{ width: 40, height: 4, borderRadius: 999, backgroundColor: '#DEE5EE', alignSelf: 'center', marginBottom: 16 }}
+              className="w-[40px] h-[4px] rounded-[999px] bg-[#DEE5EE] self-center mb-[16px]"
             />
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <View style={{ flex: 1 }}>
-                <Text className="font-sans-semibold" style={{ fontSize: 16, letterSpacing: -0.3, color: C.ink }}>
+            <View className="flex-row items-center mb-[16px]">
+              <View className="flex-1">
+                <Text className="font-sans-semibold text-[16px] tracking-[-0.3px] text-[#0C1524]">
                   Root cause analysis
                 </Text>
-                <Text className="font-sans-medium" style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
+                <Text className="font-sans-medium text-[12.5px] text-[#5C7291] mt-[4px]">
                   What went wrong and what you did. The customer sees this.
                 </Text>
               </View>
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => setRcaVisible(false)}
-                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                className="w-[44px] h-[44px] items-center justify-center"
               >
                 <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 999,
-                    backgroundColor: C.chipGrey,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  className="w-[32px] h-[32px] rounded-[999px] bg-[#F2F5F9] items-center justify-center"
                 >
                   <Feather name="x" size={16} color={C.body} />
                 </View>
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView className="shrink" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <TicketRCAForm ticket={ticket} onDone={() => setRcaVisible(false)} />
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      </Sheet>
     </Ground>
   );
 }
@@ -958,8 +815,8 @@ export default function TicketDetailScreen() {
 ------------------------------------------------------------------ */
 function Ground({ colors, children }) {
   return (
-    <View style={{ flex: 1, backgroundColor: colors[0] }}>
-      <LinearGradient colors={colors} locations={[0, 0.34, 1]} style={StyleSheet.absoluteFill} />
+    <View className="flex-1 bg-white">
+      <LinearGradient colors={colors} locations={[0, 0.34, 1]} className="absolute inset-0" />
       {children}
     </View>
   );
@@ -970,25 +827,27 @@ function RoundButton({ icon, onPress }) {
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={onPress}
-      style={[
-        {
-          width: 46,
-          height: 46,
-          borderRadius: 999,
-          backgroundColor: C.surface,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        SHADOW_FLOAT,
-      ]}
+      className="w-[46px] h-[46px] rounded-[999px] bg-[#FFFFFF] items-center justify-center"
+      style={sx.shadowFloat}
     >
       <Feather name={icon} size={19} color="#101828" />
     </TouchableOpacity>
   );
 }
 
-function LivePulse({ color }) {
+function LivePulse({ color, dotClass }) {
   const pulse = useRef(new Animated.Value(0)).current;
+  const ringStyle = useMemo(
+    () => [
+      sx.pulseRing,
+      {
+        backgroundColor: color,
+        opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
+        transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
+      },
+    ],
+    [color, pulse],
+  );
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -1001,19 +860,9 @@ function LivePulse({ color }) {
   }, [pulse]);
 
   return (
-    <View style={{ width: 8, height: 8, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          backgroundColor: color,
-          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
-          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
-        }}
-      />
-      <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: color }} />
+    <View className="w-[8px] h-[8px] items-center justify-center">
+      <Animated.View style={ringStyle} />
+      <View className={`w-[8px] h-[8px] rounded-[999px] ${dotClass}`} />
     </View>
   );
 }
@@ -1023,26 +872,24 @@ function LivePulse({ color }) {
 ------------------------------------------------------------------ */
 function StatTile({ icon, tint, iconColor, title, value }) {
   return (
-    <View style={[{ flex: 1, backgroundColor: C.surface, borderRadius: 20, padding: 15 }, SHADOW_CARD]}>
-      <View
-        style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: tint, alignItems: 'center', justifyContent: 'center' }}
-      >
+    <View className="flex-1 bg-[#FFFFFF] rounded-[20px] p-[15px]" style={sx.shadowCard}>
+      <View className={`w-[36px] h-[36px] rounded-[12px] items-center justify-center ${tint}`}>
         <Feather name={icon} size={16} color={iconColor} />
       </View>
-      <Text className="font-sans-semibold" style={{ fontSize: 13.5, color: C.ink, marginTop: 12 }}>
+      <Text className="font-sans-semibold text-[13.5px] text-[#0C1524] mt-[12px]">
         {title}
       </Text>
-      <Text numberOfLines={2} className="font-sans-medium" style={{ fontSize: 12, lineHeight: 16, color: C.muted, marginTop: 3 }}>
+      <Text numberOfLines={2} className="font-sans-medium text-[12px] leading-[16px] text-[#5C7291] mt-[3px]">
         {value}
       </Text>
     </View>
   );
 }
 
-function StepsCard({ steps, accent }) {
+function StepsCard({ steps, accentText, accentBg }) {
   return (
-    <View style={[{ backgroundColor: C.surface, borderRadius: 22, padding: 18, marginBottom: 16 }, SHADOW_CARD]}>
-      <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.ink, marginBottom: 16 }}>
+    <View className="bg-[#FFFFFF] rounded-[22px] p-[18px] mb-[16px]" style={sx.shadowCard}>
+      <Text className="font-sans-semibold text-[12.5px] text-[#0C1524] mb-[16px]">
         What happens next
       </Text>
 
@@ -1051,34 +898,25 @@ function StepsCard({ steps, accent }) {
         const done = step.state === 'done';
         const now = step.state === 'now';
         return (
-          <View key={step.title} style={{ flexDirection: 'row', gap: 13 }}>
-            <View style={{ width: 22, alignItems: 'center' }}>
+          <View key={step.title} className="flex-row gap-[13px]">
+            <View className="w-[22px] items-center">
               <View
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 999,
-                  backgroundColor: done ? C.greenTint : now ? C.blueTint : C.chipGrey,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className={`w-[22px] h-[22px] rounded-[999px] items-center justify-center ${done ? 'bg-[#DFF3EA]' : now ? 'bg-[#EAF2FE]' : 'bg-[#F2F5F9]'}`}
               >
                 {done ? <Feather name="check" size={11} color={C.green} /> : null}
-                {now ? <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: accent }} /> : null}
+                {now ? <View className={`w-[8px] h-[8px] rounded-[999px] ${accentBg}`} /> : null}
               </View>
-              {!isLast ? <View style={{ flex: 1, width: 2, backgroundColor: C.hair, marginVertical: 4 }} /> : null}
+              {!isLast ? <View className="flex-1 w-[2px] bg-[#EDF1F7] my-[4px]" /> : null}
             </View>
 
-            <View style={{ flex: 1, paddingBottom: isLast ? 0 : 16 }}>
+            <View className={`flex-1 ${isLast ? 'pb-0' : 'pb-[16px]'}`}>
               <Text
-                className={now ? 'font-sans-semibold' : 'font-sans-medium'}
-                style={{ fontSize: 13.5, lineHeight: 19, color: now || done ? C.ink : C.muted }}
+                className={`${now ? 'font-sans-semibold' : 'font-sans-medium'} text-[13.5px] leading-[19px] ${now || done ? 'text-[#0C1524]' : 'text-[#5C7291]'}`}
               >
                 {step.title}
               </Text>
               <Text
-                className={now ? 'font-sans-semibold' : 'font-sans-medium'}
-                style={{ fontSize: 12, lineHeight: 18, color: now ? accent : C.soft, marginTop: 3 }}
+                className={`${now ? 'font-sans-semibold' : 'font-sans-medium'} text-[12px] leading-[18px] mt-[3px] ${now ? accentText : 'text-[#6B7A93]'}`}
               >
                 {step.note}
               </Text>
@@ -1095,36 +933,36 @@ function OutcomeCard({ ticket, fixedIn }) {
 
   if (!ticket?.rca && !ticket?.rca_images?.length) return null;
   return (
-    <View style={[{ backgroundColor: C.surface, borderRadius: 22, overflow: 'hidden', marginTop: 14 }, SHADOW_CARD]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingTop: 17 }}>
+    <View className="bg-[#FFFFFF] rounded-[22px] overflow-hidden mt-[14px]" style={sx.shadowCard}>
+      <View className="flex-row items-center gap-[11px] px-[18px] pt-[17px]">
         <View
-          style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.greenTint, alignItems: 'center', justifyContent: 'center' }}
+          className="w-[36px] h-[36px] rounded-[12px] bg-[#DFF3EA] items-center justify-center"
         >
           <Feather name="search" size={16} color={C.green} />
         </View>
-        <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+        <Text className="font-sans-semibold text-[13px] text-[#0C1524]">
           What went wrong
         </Text>
       </View>
 
       {ticket.rca ? (
-        <View style={{ paddingHorizontal: 18, paddingTop: 15 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.soft, marginBottom: 5 }}>
+        <View className="px-[18px] pt-[15px]">
+          <Text className="font-sans-semibold text-[11px] text-[#6B7A93] mb-[5px]">
             Cause and fix
           </Text>
-          <Text className="font-sans" style={{ fontSize: 13.5, lineHeight: 21, color: C.body }}>
+          <Text className="font-sans text-[13.5px] leading-[21px] text-[#26313F]">
             {ticket.rca}
           </Text>
         </View>
       ) : null}
 
       {ticket.rca_images?.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 15, paddingLeft: 18 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-[15px] pl-[18px]">
           {ticket.rca_images.map((url) => (
             <TouchableOpacity key={url} activeOpacity={0.85} onPress={() => setLightboxUrl(url)}>
               <Image
                 source={{ uri: url }}
-                style={{ width: 56, height: 56, borderRadius: 14, marginRight: 9, backgroundColor: C.chipGrey }}
+                className="w-[56px] h-[56px] rounded-[14px] mr-[9px] bg-[#F2F5F9]"
                 contentFit="cover"
                 cachePolicy="disk"
               />
@@ -1133,69 +971,63 @@ function OutcomeCard({ ticket, fixedIn }) {
         </ScrollView>
       ) : null}
 
-      <View style={{ paddingHorizontal: 18, paddingTop: 15, paddingBottom: 18 }}>
-        <View style={{ height: 1, backgroundColor: C.hair, marginBottom: 13 }} />
-        <Text className="font-sans-medium" style={{ fontSize: 12, color: C.muted }}>
+      <View className="px-[18px] pt-[15px] pb-[18px]">
+        <View className="h-[1px] bg-[#EDF1F7] mb-[13px]" />
+        <Text className="font-sans-medium text-[12px] text-[#5C7291]">
           {fixedIn ? `Fixed in ${fixedIn} from when you reported it.` : 'Marked as resolved by our team.'}
         </Text>
       </View>
 
-      <Modal visible={!!lightboxUrl} transparent={false} animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+      <Sheet
+        visible={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        variant="full"
+        edges={[]}
+        animationType="fade"
+        keyboard={false}
+        className="bg-black"
+      >
         <LightboxContent url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
-      </Modal>
+      </Sheet>
     </View>
   );
 }
 
 function RcaPrompt({ onWrite, onLater }) {
   return (
-    <View style={[{ backgroundColor: C.surface, borderRadius: 22, padding: 16 }, SHADOW_FLOAT]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+    <View className="bg-[#FFFFFF] rounded-[22px] p-[12px] std:p-[16px]" style={sx.shadowFloat}>
+      <View className="flex-row items-center gap-[11px]">
         <View
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 12,
-            backgroundColor: C.amberTint,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          className="w-[38px] h-[38px] rounded-[12px] bg-[#FEF1E7] items-center justify-center"
         >
           <Feather name="edit-3" size={17} color={C.amber} />
         </View>
-        <View style={{ flex: 1 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+        <View className="flex-1">
+          <Text className="font-sans-semibold text-[13px] text-[#0C1524]">
             Root cause analysis pending
           </Text>
-          <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.soft, marginTop: 2 }}>
+          <Text className="font-sans-medium text-[11.5px] text-[#6B7A93] mt-[2px]">
             Needed before this ticket closes
           </Text>
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 9, marginTop: 14 }}>
+      <View className="flex-row gap-[9px] mt-[14px]">
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onWrite}
-          style={{ flex: 1, height: 46, borderRadius: 999, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}
+          className="flex-1 h-[46px] rounded-[999px] bg-[#0C1524] items-center justify-center"
         >
-          <Text className="font-sans-semibold" style={{ fontSize: 13, color: '#FFFFFF' }}>
+          <Text className="font-sans-semibold text-[13px] text-[#FFFFFF]">
             Write RCA
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onLater}
-          style={{
-            height: 46,
-            paddingHorizontal: 18,
-            borderRadius: 999,
-            backgroundColor: C.chipGrey,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          className="h-[46px] px-[18px] rounded-[999px] bg-[#F2F5F9] items-center justify-center"
         >
-          <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.body }}>
+          <Text className="font-sans-semibold text-[13px] text-[#26313F]">
             Later
           </Text>
         </TouchableOpacity>
@@ -1206,27 +1038,22 @@ function RcaPrompt({ onWrite, onLater }) {
 
 function ClosedCard({ onReopen }) {
   return (
-    <View
-      style={[
-        { flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: C.surface, borderRadius: 22, padding: 14 },
-        SHADOW_FLOAT,
-      ]}
-    >
+    <View className="flex-row items-center gap-[13px] bg-[#FFFFFF] rounded-[22px] p-[14px]" style={sx.shadowFloat}>
       <Feather name="lock" size={17} color={C.faint} />
-      <View style={{ flex: 1 }}>
-        <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.body }}>
+      <View className="flex-1">
+        <Text className="font-sans-semibold text-[12.5px] text-[#26313F]">
           This conversation is closed
         </Text>
-        <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.soft, marginTop: 2 }}>
+        <Text className="font-sans-medium text-[11.5px] text-[#6B7A93] mt-[2px]">
           Reopen it if the problem comes back
         </Text>
       </View>
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={onReopen}
-        style={{ height: 44, justifyContent: 'center', paddingHorizontal: 18, borderRadius: 999, backgroundColor: C.blueTint }}
+        className="h-[44px] justify-center px-[18px] rounded-[999px] bg-[#EAF2FE]"
       >
-        <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.blueInk }}>
+        <Text className="font-sans-semibold text-[12.5px] text-[#1B5FC0]">
           Reopen
         </Text>
       </TouchableOpacity>
@@ -1240,16 +1067,9 @@ function ClosedCard({ onReopen }) {
 function DayDivider({ label }) {
   return (
     <View
-      style={{
-        alignSelf: 'center',
-        backgroundColor: 'rgba(255,255,255,0.7)',
-        borderRadius: 999,
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        marginVertical: 12,
-      }}
+      className="self-center bg-[rgba(255,255,255,0.7)] rounded-[999px] px-[14px] py-[7px] my-[12px]"
     >
-      <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.muted }}>
+      <Text className="font-sans-semibold text-[11px] text-[#5C7291]">
         {label}
       </Text>
     </View>
@@ -1259,22 +1079,16 @@ function DayDivider({ label }) {
 function SystemPill({ event }) {
   const config = getEventConfig(event.event_type);
   return (
-    <View style={{ alignItems: 'center', marginVertical: 9, paddingHorizontal: 16 }}>
+    <View className="items-center my-[9px] px-[12px] std:px-[16px]">
       <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          gap: 8,
-          backgroundColor: 'rgba(255,255,255,0.7)',
-          borderRadius: 20,
-          paddingHorizontal: 15,
-          paddingVertical: 8,
-        }}
+        className="flex-row items-start gap-[8px] bg-[rgba(255,255,255,0.7)] rounded-[20px] px-[15px] py-[8px]"
       >
-        <Feather name={config.icon || 'info'} size={12} color={C.muted} style={{ marginTop: 2 }} />
-        <Text className="font-sans-medium" style={{ fontSize: 12, lineHeight: 17, color: C.muted, flexShrink: 1 }}>
+        <View className="mt-[2px]">
+          <Feather name={config.icon || 'info'} size={12} color={C.muted} />
+        </View>
+        <Text className="font-sans-medium text-[12px] leading-[17px] text-[#5C7291] shrink">
           {event.actor_name ? (
-            <Text className="font-sans-semibold" style={{ color: C.body }}>
+            <Text className="font-sans-semibold text-[#26313F]">
               {event.actor_name}{' '}
             </Text>
           ) : null}
@@ -1307,75 +1121,39 @@ function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
     }
   };
 
-  const big = 20;
-  const tail = 7;
+  // 20 for the rounded corners, 7 for the tail corner.
   const radius = isMe
-    ? {
-      borderTopLeftRadius: big,
-      borderTopRightRadius: runStart ? big : tail,
-      borderBottomRightRadius: tail,
-      borderBottomLeftRadius: big,
-    }
-    : {
-      borderTopLeftRadius: runStart ? big : tail,
-      borderTopRightRadius: big,
-      borderBottomRightRadius: big,
-      borderBottomLeftRadius: tail,
-    };
+    ? `rounded-tl-[20px] rounded-bl-[20px] rounded-br-[7px] ${runStart ? 'rounded-tr-[20px]' : 'rounded-tr-[7px]'}`
+    : `rounded-tr-[20px] rounded-br-[20px] rounded-bl-[7px] ${runStart ? 'rounded-tl-[20px]' : 'rounded-tl-[7px]'}`;
 
   const imageOnly = !event.message && images.length > 0;
 
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        justifyContent: isMe ? 'flex-end' : 'flex-start',
-        marginTop: runStart ? 8 : 4,
-      }}
+      className={`flex-row items-end ${isMe ? 'justify-end' : 'justify-start'} ${runStart ? 'mt-[8px]' : 'mt-[4px]'}`}
     >
       {!isMe ? (
         runEnd ? (
           <View
-            style={[
-              {
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                backgroundColor: C.surface,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 10,
-                marginBottom: 2,
-              },
-              SHADOW_CARD,
-            ]}
+            className="w-[32px] h-[32px] rounded-[999px] bg-[#FFFFFF] items-center justify-center mr-[10px] mb-[2px]"
+            style={sx.shadowCard}
           >
-            <Text className="font-sans-semibold" style={{ fontSize: 12, color: tone.accent }}>
+            <Text className={`font-sans-semibold text-[12px] ${tone.accentText}`}>
               {event.actor_name ? event.actor_name.charAt(0).toUpperCase() : 'S'}
             </Text>
           </View>
         ) : (
-          <View style={{ width: 42 }} />
+          <View className="w-[42px]" />
         )
       ) : null}
 
       <View
-        style={[
-          {
-            maxWidth: '82%',
-            backgroundColor: isMe ? tone.bubble : C.surface,
-            overflow: 'hidden',
-            padding: imageOnly ? 5 : 0,
-          },
-          radius,
-          isMe ? null : SHADOW_CARD,
-        ]}
+        className={`max-w-[82%] overflow-hidden ${imageOnly ? 'p-[5px]' : 'p-0'} ${isMe ? tone.bubbleBg : 'bg-[#FFFFFF]'} ${radius}`}
+        style={isMe ? undefined : sx.shadowCard}
       >
         {!isMe && runStart ? (
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: 11.5, color: tone.accent, paddingHorizontal: 16, paddingTop: 13 }}
+            className={`font-sans-semibold text-[11.5px] px-[12px] std:px-[16px] pt-[13px] ${tone.accentText}`}
           >
             {event.actor_name || 'Support'}
           </Text>
@@ -1383,14 +1161,7 @@ function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
 
         {event.message ? (
           <Text
-            className="font-sans"
-            style={{
-              fontSize: 15.5,
-              lineHeight: 23,
-              color: C.ink,
-              paddingHorizontal: 16,
-              paddingTop: !isMe && runStart ? 5 : 13,
-            }}
+            className={`font-sans text-[15.5px] leading-[23px] text-[#0C1524] px-[12px] std:px-[16px] ${!isMe && runStart ? 'pt-[5px]' : 'pt-[13px]'}`}
           >
             {event.message}
           </Text>
@@ -1401,28 +1172,20 @@ function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
             key={url}
             activeOpacity={0.85}
             onPress={() => setLightboxUrl(url)}
-            style={{ marginTop: imageOnly && i === 0 ? 0 : 8 }}
+            className={`${imageOnly && i === 0 ? 'mt-0' : 'mt-[8px]'}`}
           >
             <Image
               source={{ uri: url }}
               contentFit="cover"
-              style={{ width: 232, height: 150, borderRadius: imageOnly ? 16 : 0 }}
+              className={`w-[232px] h-[150px] ${imageOnly ? 'rounded-[16px]' : 'rounded-none'}`}
               cachePolicy="disk"
               transition={150}
             />
             {imageOnly && i === images.length - 1 ? (
               <View
-                style={{
-                  position: 'absolute',
-                  right: 9,
-                  bottom: 9,
-                  backgroundColor: 'rgba(12,21,36,0.55)',
-                  borderRadius: 999,
-                  paddingHorizontal: 9,
-                  paddingVertical: 4,
-                }}
+                className="absolute right-[9px] bottom-[9px] bg-[rgba(12,21,36,0.55)] rounded-[999px] px-[9px] py-[4px]"
               >
-                <Text className="font-sans-medium" style={{ fontSize: 11, color: '#FFFFFF' }}>
+                <Text className="font-sans-medium text-[11px] text-[#FFFFFF]">
                   {clockTime(event.created_at)}
                 </Text>
               </View>
@@ -1431,7 +1194,7 @@ function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
         ))}
 
         {videos.length > 0 ? (
-          <View style={{ paddingHorizontal: 10, paddingTop: 10 }}>
+          <View className="px-[10px] pt-[10px]">
             {videos.map((url) => (
               <AttachmentRow
                 key={url}
@@ -1448,7 +1211,7 @@ function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
         ) : null}
 
         {documents.length > 0 ? (
-          <View style={{ paddingHorizontal: 10, paddingTop: 10 }}>
+          <View className="px-[10px] pt-[10px]">
             {documents.map((url) => {
               const { title, ext } = prettyFileName(url);
               return (
@@ -1468,17 +1231,25 @@ function MessageBubble({ event, isMe, runStart, runEnd, tone }) {
         ) : null}
 
         {!imageOnly ? (
-          <View style={{ alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 10, paddingTop: 5 }}>
-            <Text className="font-sans-medium" style={{ fontSize: 11.5, color: isMe ? tone.bubbleMeta : C.faint }}>
+          <View className="items-end px-[12px] std:px-[16px] pb-[10px] pt-[5px]">
+            <Text className={`font-sans-medium text-[11.5px] ${isMe ? tone.bubbleMetaText : 'text-[#8397B0]'}`}>
               {clockTime(event.created_at)}
             </Text>
           </View>
         ) : null}
       </View>
 
-      <Modal visible={!!lightboxUrl} transparent={false} animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+      <Sheet
+        visible={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        variant="full"
+        edges={[]}
+        animationType="fade"
+        keyboard={false}
+        className="bg-black"
+      >
         <LightboxContent url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -1489,28 +1260,18 @@ function AttachmentRow({ icon, actionIcon, title, meta, isMe, isDownloading, onP
       activeOpacity={0.7}
       onPress={onPress}
       disabled={isDownloading}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 11,
-        backgroundColor: isMe ? 'rgba(255,255,255,0.6)' : C.chipGrey,
-        borderRadius: 15,
-        paddingHorizontal: 12,
-        paddingVertical: 11,
-        marginBottom: 4,
-        minWidth: 210,
-      }}
+      className={`flex-row items-center gap-[11px] rounded-[15px] px-[12px] py-[11px] mb-[4px] min-w-[210px] ${isMe ? 'bg-[rgba(255,255,255,0.6)]' : 'bg-[#F2F5F9]'}`}
     >
       <View
-        style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.blueTint, alignItems: 'center', justifyContent: 'center' }}
+        className="w-[36px] h-[36px] rounded-[12px] bg-[#EAF2FE] items-center justify-center"
       >
         <Feather name={icon} size={16} color={C.blue} />
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+      <View className="flex-1 min-w-0">
+        <Text numberOfLines={1} className="font-sans-semibold text-[13px] text-[#0C1524]">
           {title}
         </Text>
-        <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+        <Text className="font-sans-medium text-[11.5px] text-[#5C7291] mt-[2px]">
           {meta}
         </Text>
       </View>
@@ -1522,9 +1283,9 @@ function AttachmentRow({ icon, actionIcon, title, meta, isMe, isDownloading, onP
 /* ------------------------------------------------------------------
    SHEET PIECES
 ------------------------------------------------------------------ */
-function SheetLabel({ children, style }) {
+function SheetLabel({ children, className = '' }) {
   return (
-    <Text className="font-sans-semibold" style={[{ fontSize: 11.5, color: C.soft, marginLeft: 4, marginBottom: 8 }, style]}>
+    <Text className={`font-sans-semibold text-[11.5px] text-[#6B7A93] ml-[4px] mb-[8px] ${className}`}>
       {children}
     </Text>
   );
@@ -1532,7 +1293,7 @@ function SheetLabel({ children, style }) {
 
 function InfoGroup({ children }) {
   return (
-    <View style={[{ backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 14 }, SHADOW_CARD]}>{children}</View>
+    <View className="bg-[#FFFFFF] rounded-[20px] px-[14px]" style={sx.shadowCard}>{children}</View>
   );
 }
 
@@ -1541,35 +1302,28 @@ function InfoRow({ row, first, status, onPress }) {
   return (
     <Wrapper
       {...(onPress ? { activeOpacity: 0.6, onPress } : {})}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        minHeight: 58,
-        paddingVertical: 12,
-        borderTopWidth: first ? 0 : 1,
-        borderTopColor: C.hair,
-      }}
+      className={`flex-row items-center min-h-[58px] py-[12px] border-t-[#EDF1F7] ${first ? 'border-t-0' : 'border-t'}`}
     >
       <View
-        style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.blueTint, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}
+        className="w-[36px] h-[36px] rounded-[12px] bg-[#EAF2FE] items-center justify-center mr-[12px]"
       >
         <Feather name={row.icon} size={15} color={C.blue} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text className="font-sans-medium" style={{ fontSize: 11.5, color: C.soft }}>
+      <View className="flex-1">
+        <Text className="font-sans-medium text-[11.5px] text-[#6B7A93]">
           {row.label}
         </Text>
         {row.isStatus ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+          <View className="flex-row items-center mt-[3px]">
             <View
-              style={{ width: 8, height: 8, borderRadius: 999, marginRight: 7, backgroundColor: STATUS_DOT_COLORS[status] || C.faint }}
+              className={`w-[8px] h-[8px] rounded-[999px] mr-[7px] ${STATUS_DOT_CLASSES[status] || 'bg-[#8397B0]'}`}
             />
-            <Text className="font-sans-semibold" style={{ fontSize: 14, color: C.ink }}>
+            <Text className="font-sans-semibold text-[14px] text-[#0C1524]">
               {statusLabel(status)}
             </Text>
           </View>
         ) : (
-          <Text numberOfLines={2} className="font-sans-semibold" style={{ fontSize: 14, color: C.ink, marginTop: 2 }}>
+          <Text numberOfLines={2} className="font-sans-semibold text-[14px] text-[#0C1524] mt-[2px]">
             {row.value}
           </Text>
         )}
@@ -1581,3 +1335,21 @@ function InfoRow({ row, first, status, onPress }) {
 
 
 
+
+const sx = StyleSheet.create({
+  shadowCard: {
+    shadowColor: '#1C365C',
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  shadowFloat: {
+    shadowColor: '#1C365C',
+    shadowOpacity: 0.09,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 5,
+  },
+  pulseRing: { position: 'absolute', width: 8, height: 8, borderRadius: 999 },
+});

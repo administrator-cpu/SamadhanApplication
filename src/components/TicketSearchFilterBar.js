@@ -1,7 +1,9 @@
 // src/components/TicketSearchFilterBar.js
 import { useState } from 'react';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { Keyboard, Modal, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Keyboard, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Sheet from './layout/Sheet';
+import { DENSE_FONT_SCALE } from './layout/tokens';
 import { C } from './TicketCard';
 import { statusLabel } from '../utils/ticketStatus';
 
@@ -39,8 +41,7 @@ export default function TicketSearchFilterBar({
   return (
     <>
       <View
-        className="flex-row items-center shadow-sm"
-        style={{ backgroundColor: '#FFFFFF', borderRadius: 999, height: 56, paddingLeft: 16, paddingRight: 8, gap: 10 }}
+        className="flex-row items-center shadow-sm bg-[#FFFFFF] rounded-[999px] h-[56px] pl-[16px] pr-[8px] gap-[10px]"
       >
         <Feather name="search" size={17} color={C.inkFaint} />
         <TextInput
@@ -48,8 +49,7 @@ export default function TicketSearchFilterBar({
           onChangeText={onChangeSearch}
           placeholder={placeholder}
           placeholderTextColor={C.inkFaint}
-          className="font-sans"
-          style={{ flex: 1, minWidth: 0, height: '100%', fontSize: 14, color: C.ink }}
+          className="font-sans flex-1 min-w-0 h-full text-[14px] text-[#151233]"
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -62,62 +62,35 @@ export default function TicketSearchFilterBar({
         )}
         <TouchableOpacity
           onPress={() => setMenuVisible(true)}
-          className="items-center justify-center"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 999,
-            backgroundColor: hasActiveFilter ? C.violet : C.ink,
-          }}
+          className={`items-center justify-center w-[34px] h-[34px] rounded-[999px] ${hasActiveFilter ? 'bg-[#6C5CE7]' : 'bg-[#151233]'}`}
         >
           <Ionicons name="filter" size={15} color={C.bg} />
           {hasActiveFilter && (
             <View
-              style={{
-                position: 'absolute',
-                top: -2,
-                right: -2,
-                width: 14,
-                height: 14,
-                borderRadius: 999,
-                backgroundColor: C.coral,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1.5,
-                borderColor: '#FFFFFF',
-              }}
+              className="absolute top-[-2px] right-[-2px] w-[14px] h-[14px] rounded-[999px] items-center justify-center border-[1.5px] border-[#FFFFFF] bg-[#C2410C]"
             >
-              <Text style={{ fontSize: 8, color: '#FFFFFF', fontWeight: '700' }}>{selectedStatuses.length}</Text>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className="text-[8px] text-[#FFFFFF] font-bold">{selectedStatuses.length}</Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Status picker menu */}
-      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(21,18,51,0.45)', justifyContent: 'flex-end' }}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{
-              backgroundColor: C.bg,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingTop: 10,
-              paddingBottom: 32,
-              paddingHorizontal: 20,
-            }}
-          >
+      <Sheet
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        animationType="fade"
+        keyboard={false}
+        backdropClassName="bg-[rgba(21,18,51,0.45)]"
+        className="rounded-tl-[28px] rounded-tr-[28px] pt-[10px] pb-[20px] px-[16px] std:px-[20px] bg-[#F3F2FD]"
+      >
             <View
-              style={{ width: 40, height: 4, borderRadius: 999, backgroundColor: C.track, alignSelf: 'center', marginBottom: 16 }}
+              className="w-[40px] h-[4px] rounded-[999px] self-center mb-[16px] bg-[#EBE8FF]"
             />
-            <Text className="font-sans-semibold" style={{ fontSize: 17, color: C.ink, marginBottom: 4 }}>
+            <Text className="font-sans-semibold text-[17px] mb-[4px] text-[#151233]">
               Filter by status
             </Text>
-            <Text className="font-sans" style={{ fontSize: 12, color: C.inkMuted, marginBottom: 16 }}>
+            <Text className="font-sans text-[12px] mb-[16px] text-[#6D6A96]">
               Select one or more — leave empty to show all
             </Text>
 
@@ -128,18 +101,10 @@ export default function TicketSearchFilterBar({
                   key={status}
                   onPress={() => toggleStatus(status)}
                   activeOpacity={0.8}
-                  className="flex-row items-center justify-between"
-                  style={{
-                    backgroundColor: checked ? C.violetTint : C.card,
-                    borderRadius: 14,
-                    paddingHorizontal: 14,
-                    paddingVertical: 13,
-                    marginBottom: 8,
-                  }}
+                  className={`flex-row items-center justify-between rounded-[14px] px-[14px] py-[13px] mb-[8px] ${checked ? 'bg-[#EBE8FF]' : 'bg-[#FFFFFF]'}`}
                 >
                   <Text
-                    className="font-sans-medium"
-                    style={{ fontSize: 14, color: checked ? C.violetInk : C.ink }}
+                    className={`font-sans-medium text-[14px] ${checked ? 'text-[#4A34C7]' : 'text-[#151233]'}`}
                   >
                     {statusLabel(status)}
                   </Text>
@@ -148,34 +113,30 @@ export default function TicketSearchFilterBar({
               );
             })}
 
-            <View className="flex-row" style={{ gap: 10, marginTop: 8 }}>
+            <View className="flex-row gap-[10px] mt-[8px]">
               <TouchableOpacity
                 onPress={() => {
                   onChangeStatuses([]);
                   setMenuVisible(false);
                 }}
                 activeOpacity={0.85}
-                className="flex-1 items-center justify-center"
-                style={{ backgroundColor: C.card, borderRadius: 14, height: 46 }}
+                className="flex-1 items-center justify-center rounded-[14px] h-[46px] bg-[#FFFFFF]"
               >
-                <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.inkMuted }}>
+                <Text className="font-sans-semibold text-[13px] text-[#6D6A96]">
                   Clear
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setMenuVisible(false)}
                 activeOpacity={0.85}
-                className="flex-1 items-center justify-center"
-                style={{ backgroundColor: C.violet, borderRadius: 14, height: 46 }}
+                className="flex-1 items-center justify-center rounded-[14px] h-[46px] bg-[#6C5CE7]"
               >
-                <Text className="font-sans-semibold" style={{ fontSize: 13, color: '#FFFFFF' }}>
+                <Text className="font-sans-semibold text-[13px] text-[#FFFFFF]">
                   Apply
                 </Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
     </>
   );
 }

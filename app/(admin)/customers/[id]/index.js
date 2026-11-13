@@ -2,8 +2,9 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View, Text, TextInput, Pressable, ActivityIndicator, Alert,
-  ScrollView, StyleSheet, Platform, KeyboardAvoidingView
+  StyleSheet, Platform,
 } from 'react-native';
+import Screen from '../../../../src/components/layout/Screen';
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useCustomers, useUpdateCustomer, useDeleteCustomer } from '../../../../src/hooks/useCustomers';
@@ -91,10 +92,7 @@ export default function EditCustomer() {
   const initials = name ? name.charAt(0).toUpperCase() : '?';
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <>
        <Stack.Screen
         options={{
           title: 'Profile',
@@ -102,11 +100,8 @@ export default function EditCustomer() {
           headerShadowVisible: false,
         }}
       />
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      {/* Native stack header owns the top inset. */}
+      <Screen edges={[]} scroll keyboard className="bg-[#f8fafc]" contentContainerStyle={styles.scrollContent}>
 
         {updateError && (
           <View style={styles.errorBanner}>
@@ -135,7 +130,7 @@ export default function EditCustomer() {
             </View>
             <View style={styles.outstandingTextContainer}>
               <Text style={styles.outstandingLabel}>Current Balance</Text>
-              <Text style={[styles.outstandingAmount, { color: customer.outstanding > 0 ? '#dc2626' : '#16a34a' }]}>
+              <Text className={customer.outstanding > 0 ? 'text-[#dc2626]' : 'text-[#16a34a]'} style={styles.outstandingAmount}>
                 ₹{customer.outstanding}
               </Text>
             </View>
@@ -174,7 +169,7 @@ export default function EditCustomer() {
             />
           </View>
 
-          <View style={[styles.inputWrapper, focusedInput === 'phone' && styles.inputWrapperFocused, { marginBottom: 0 }]}>
+          <View style={[styles.inputWrapper, focusedInput === 'phone' && styles.inputWrapperFocused, styles.inputWrapperLast]}>
             <Feather name="phone" size={18} color={focusedInput === 'phone' ? '#3b82f6' : '#94a3b8'} style={styles.inputIcon} />
             <TextInput
               value={phone}
@@ -197,7 +192,7 @@ export default function EditCustomer() {
             style={styles.actionRow}
             onPress={() => router.push(`/(admin)/customers/${customer.customer_row_id}/connections`)}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: '#eff6ff' }]}>
+            <View className="bg-[#eff6ff]" style={styles.actionIconBg}>
               <Feather name="wifi" size={18} color="#3b82f6" />
             </View>
             <View style={styles.actionTextContainer}>
@@ -217,7 +212,7 @@ export default function EditCustomer() {
               setMetricsCustomer(customer);
             }}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: '#f5f3ff' }]}>
+            <View className="bg-[#f5f3ff]" style={styles.actionIconBg}>
               <Feather name="bar-chart-2" size={18} color="#8b5cf6" />
             </View>
             <View style={styles.actionTextContainer}>
@@ -275,14 +270,13 @@ export default function EditCustomer() {
           customerId={metricsCustomer?.customer_row_id}
           connections={metricsCustomer?.connections ?? []}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  scrollContent: { padding: 16, paddingBottom: 60 },
+  scrollContent: { padding: 16 },
   centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' },
 
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fef2f2', padding: 14, borderRadius: 12, marginBottom: 16 },
@@ -313,6 +307,7 @@ const styles = StyleSheet.create({
 
   // Interactive Inputs
   inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, marginBottom: 14, paddingHorizontal: 16, borderWidth: 1.5, borderColor: '#f1f5f9' },
+  inputWrapperLast: { marginBottom: 0 },
   inputWrapperFocused: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, paddingVertical: 16, fontSize: 16, color: '#0f172a', fontWeight: '500' },

@@ -3,14 +3,15 @@ import { Feather } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Image,
   Pressable,
   RefreshControl,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import Screen, { ScreenFlatList } from '../../../src/components/layout/Screen';
 import { useRouter } from 'expo-router';
 
 import { useEmployees } from '../../../src/hooks/useCustomers';
@@ -40,21 +41,14 @@ const C = {
 
 const MONO = 'ui-monospace';
 
+// [background class, ink class] avatar tints.
 const TINTS = [
-  ['#ebe8ff', '#4a34c7'],
-  ['#ccf7e4', '#0f7a56'],
-  ['#ffe6d6', '#a8501b'],
-  ['#e5eeff', '#1f4bb8'],
-  ['#f6e2ff', '#7a2fa8'],
+  ['bg-[#ebe8ff]', 'text-[#4a34c7]'],
+  ['bg-[#ccf7e4]', 'text-[#0f7a56]'],
+  ['bg-[#ffe6d6]', 'text-[#a8501b]'],
+  ['bg-[#e5eeff]', 'text-[#1f4bb8]'],
+  ['bg-[#f6e2ff]', 'text-[#7a2fa8]'],
 ];
-
-const SHADOW = {
-  shadowColor: '#151233',
-  shadowOpacity: 0.06,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 2,
-};
 
 const ROLE_LABELS = {
   SUPPORT_AGENT: 'Support',
@@ -145,26 +139,16 @@ export default function StaffScreen() {
 
   /* ── pieces ──────────────────────────────────────────────── */
 
-  const Avatar = ({ item, index, size = 38 }) => {
+  const Avatar = ({ item, index }) => {
     const [bg, fg] = TINTS[index % TINTS.length];
     return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: 999,
-          backgroundColor: bg,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
-      >
+      <View className={`w-[38px] h-[38px] rounded-[999px] items-center justify-center overflow-hidden ${bg}`}>
         {item.profile_image ? (
-          <Image source={{ uri: item.profile_image }} style={{ width: size, height: size }} />
+          <Image source={{ uri: item.profile_image }} className="w-[38px] h-[38px]" />
         ) : (
           <Text
-            className="font-sans-bold"
-            style={{ fontSize: size * 0.34, color: fg, letterSpacing: -0.2 }}
+            maxFontSizeMultiplier={1.2}
+            className={`font-sans-bold tracking-[-0.2px] text-[12.9px] ${fg}`}
           >
             {getInitials(item.name)}
           </Text>
@@ -180,88 +164,64 @@ export default function StaffScreen() {
     const extra = rows.filter((r) => r.count === 1).length - attention.length;
 
     const Stat = ({ n, label, tone }) => (
-      <View style={{ flex: 1 }}>
-        <Text className="font-sans-bold" style={{ fontSize: 24, letterSpacing: -0.8, color: tone }}>
+      <View className="flex-1">
+        <Text maxFontSizeMultiplier={1.2} className={`font-sans-bold text-[24px] tracking-[-0.8px] ${tone}`}>
           {n}
         </Text>
-        <Text className="font-sans-semibold" style={{ fontSize: 10, lineHeight: 14, color: '#a09cd8', marginTop: 2 }}>
+        <Text className="font-sans-semibold text-[10px] leading-[14px] text-[#a09cd8] mt-[2px]">
           {label}
         </Text>
       </View>
     );
 
     return (
-      <View style={{ backgroundColor: C.ink, borderRadius: 26, padding: 18, marginBottom: 14 }}>
-        <Text className="font-sans-semibold" style={{ fontSize: 10.5, letterSpacing: 1.2, color: '#a09cd8' }}>
+      <View className="bg-[#151233] rounded-[26px] p-[18px] mb-[14px]">
+        <Text className="font-sans-semibold text-[10.5px] tracking-[1.2px] text-[#a09cd8]">
           TICKET ROUTING COVERAGE
         </Text>
 
-        <View style={{ flexDirection: 'row', marginTop: 14 }}>
-          <Stat n={rows.length} label={'Categories\ncovered'} tone={C.bg} />
-          <Stat n={coverage.thin} label={'One agent\ndeep'} tone={coverage.thin ? C.amber : C.bg} />
-          <Stat n={unrouted.length} label={'Agents with\nno category'} tone={unrouted.length ? C.coralSoft : C.bg} />
+        <View className="flex-row mt-[14px]">
+          <Stat n={rows.length} label={'Categories\ncovered'} tone="text-[#f3f2fd]" />
+          <Stat n={coverage.thin} label={'One agent\ndeep'} tone={coverage.thin ? 'text-[#ffd166]' : 'text-[#f3f2fd]'} />
+          <Stat n={unrouted.length} label={'Agents with\nno category'} tone={unrouted.length ? 'text-[#ff9d8f]' : 'text-[#f3f2fd]'} />
         </View>
 
         {attention.length > 0 && (
-          <View style={{ marginTop: 16 }}>
-            <Text className="font-sans-semibold" style={{ fontSize: 10.5, letterSpacing: 1.1, color: '#7c78b8' }}>
+          <View className="mt-[16px]">
+            <Text className="font-sans-semibold text-[10.5px] tracking-[1.1px] text-[#7c78b8]">
               ONLY ONE AGENT
             </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 }}>
+            <View className="flex-row flex-wrap gap-[6px] mt-[9px]">
               {attention.map((row) => (
                 <View
                   key={row.name}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                    borderRadius: 999,
-                    paddingLeft: 4,
-                    paddingRight: 10,
-                    paddingVertical: 4,
-                  }}
+                  className="flex-row items-center gap-[6px] bg-[rgba(255,255,255,0.08)] rounded-[999px] pl-[4px] pr-[10px] py-[4px]"
                 >
                   {(() => {
                     const agent = row.agents[0];
                     const [bg, fg] = TINTS[0];
                     return (
-                      <View
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 999,
-                          backgroundColor: bg,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          overflow: 'hidden',
-                        }}
-                      >
+                      <View className={`w-[18px] h-[18px] rounded-[999px] items-center justify-center overflow-hidden ${bg}`}>
                         {agent.profile_image ? (
-                          <Image source={{ uri: agent.profile_image }} style={{ width: 18, height: 18 }} />
+                          <Image source={{ uri: agent.profile_image }} className="w-[18px] h-[18px]" />
                         ) : (
-                          <Text className="font-sans-bold" style={{ fontSize: 8, color: fg }}>
+                          <Text className={`font-sans-bold text-[8px] ${fg}`}>
                             {getInitials(agent.name)}
                           </Text>
                         )}
                       </View>
                     );
                   })()}
-                  <Text className="font-sans-semibold" style={{ fontSize: 11, color: C.bg }}>
+                  <Text className="font-sans-semibold text-[11px] text-[#f3f2fd]">
                     {row.name}
                   </Text>
                 </View>
               ))}
               {extra > 0 && (
                 <View
-                  style={{
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                    borderRadius: 999,
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                  }}
+                  className="bg-[rgba(255,255,255,0.08)] rounded-[999px] px-[10px] py-[6px]"
                 >
-                  <Text style={{ fontFamily: MONO, fontSize: 10.5, color: '#a09cd8' }}>+{extra}</Text>
+                  <Text className="font-[ui-monospace] text-[10.5px] text-[#a09cd8]">+{extra}</Text>
                 </View>
               )}
             </View>
@@ -270,18 +230,10 @@ export default function StaffScreen() {
 
         {unrouted.length > 0 && (
           <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 9,
-              backgroundColor: 'rgba(255,107,87,0.16)',
-              borderRadius: 16,
-              padding: 12,
-              marginTop: 16,
-            }}
+            className="flex-row items-center gap-[9px] bg-[rgba(255,107,87,0.16)] rounded-[16px] p-[12px] mt-[16px]"
           >
             <Feather name="alert-triangle" size={15} color={C.coralSoft} />
-            <Text className="font-sans-semibold" style={{ flex: 1, fontSize: 11.5, lineHeight: 16, color: C.coralSoft }}>
+            <Text className="font-sans-semibold flex-1 text-[11.5px] leading-[16px] text-[#ff9d8f]">
               {unrouted.length === 1
                 ? `${unrouted[0].name} has no categories — no ticket can route to them.`
                 : `${unrouted.length} agents have no categories — no ticket can route to them.`}
@@ -293,36 +245,26 @@ export default function StaffScreen() {
   };
 
   const Header = () => (
-    <View style={{ gap: 14, marginBottom: 14, marginTop: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+    <View className="gap-[14px] mb-[14px] mt-[10px]">
+      <View className="flex-row items-end justify-between gap-[12px]">
         <View>
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: 10.5, letterSpacing: 1.2, color: C.violetDeep }}
+            className="font-sans-semibold text-[10.5px] tracking-[1.2px] text-[#4a34c7]"
           >
             TEAM
           </Text>
           <Text
-            className="font-sans-bold"
-            style={{ fontSize: 29, lineHeight: 33, letterSpacing: -0.7, color: C.ink, marginTop: 4 }}
+            className="font-sans-bold text-[29px] leading-[33px] tracking-[-0.7px] text-[#151233] mt-[4px]"
           >
             Staff
           </Text>
         </View>
         <Pressable onPress={() => router.push('/(admin)/staff/create')}>
           <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 7,
-              backgroundColor: C.ink,
-              borderRadius: 999,
-              paddingHorizontal: 14,
-              paddingVertical: 9,
-            }}
+            className="flex-row items-center gap-[7px] bg-[#151233] rounded-[999px] px-[14px] py-[9px]"
           >
             <Feather name="plus" size={14} color={C.bg} />
-            <Text className="font-sans-bold" style={{ fontSize: 12, color: C.bg }}>
+            <Text className="font-sans-bold text-[12px] text-[#f3f2fd]">
               Invite
             </Text>
           </View>
@@ -332,18 +274,8 @@ export default function StaffScreen() {
       <CoverageBoard />
 
       <View
-        style={[
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            backgroundColor: C.card,
-            borderRadius: 999,
-            paddingHorizontal: 16,
-            minHeight: 48,
-          },
-          SHADOW,
-        ]}
+        className="flex-row items-center gap-[10px] bg-[#ffffff] rounded-[999px] px-[12px] std:px-[16px] min-h-[48px]"
+        style={styles.shadow}
       >
         <Feather name="search" size={16} color={C.muted} />
         <TextInput
@@ -351,8 +283,7 @@ export default function StaffScreen() {
           onChangeText={setQuery}
           placeholder="Search the roster"
           placeholderTextColor={C.muted}
-          className="font-sans"
-          style={{ flex: 1, fontSize: 13.5, color: C.ink, paddingVertical: 0 }}
+          className="font-sans flex-1 text-[13.5px] text-[#151233] py-0"
         />
         {query.length > 0 && (
           <Pressable onPress={() => setQuery('')} hitSlop={10}>
@@ -361,25 +292,17 @@ export default function StaffScreen() {
         )}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View className="flex-row gap-[8px]">
         {tabs.map((tab) => {
           const active = roleFilter === tab.key;
           return (
-            <Pressable key={tab.key} onPress={() => setRoleFilter(tab.key)} style={{ flex: 1 }}>
+            <Pressable key={tab.key} onPress={() => setRoleFilter(tab.key)} className="flex-1">
               <View
-                style={[
-                  {
-                    alignItems: 'center',
-                    backgroundColor: active ? C.ink : C.card,
-                    borderRadius: 999,
-                    paddingVertical: 10,
-                  },
-                  SHADOW,
-                ]}
+                className={`items-center rounded-[999px] py-[10px] min-h-[44px] justify-center ${active ? 'bg-[#151233]' : 'bg-[#ffffff]'}`}
+                style={styles.shadow}
               >
                 <Text
-                  className="font-sans-bold"
-                  style={{ fontSize: 12, color: active ? C.bg : C.inkSoft, letterSpacing: -0.1 }}
+                  className={`font-sans-bold text-[12px] tracking-[-0.1px] ${active ? 'text-[#f3f2fd]' : 'text-[#3a3670]'}`}
                 >
                   {tab.label} {tab.n}
                 </Text>
@@ -396,8 +319,8 @@ export default function StaffScreen() {
     const isAgent = item.role === 'SUPPORT_AGENT';
     const gap = isAgent && cats.length === 0;
     const catLabel = gap ? 'No categories' : isAgent ? `${cats.length} categories` : 'Pipeline only';
-    const catBg = gap ? C.dangerBg : isAgent ? C.mintBg : '#f0eefc';
-    const catInk = gap ? C.dangerInk : isAgent ? C.mintInk : C.sub;
+    const catBg = gap ? 'bg-[#ffe1e1]' : isAgent ? 'bg-[#ccf7e4]' : 'bg-[#f0eefc]';
+    const catInk = gap ? 'text-[#b3261e]' : isAgent ? 'text-[#0f7a56]' : 'text-[#6d6a96]';
 
     return (
       <Pressable
@@ -405,57 +328,39 @@ export default function StaffScreen() {
         android_ripple={{ color: '#efecff' }}
       >
         <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            paddingHorizontal: 12,
-            paddingVertical: 11,
-            borderRadius: 18,
-          }}
+          className="flex-row items-center gap-[12px] px-[12px] py-[11px] rounded-[18px]"
         >
           <Avatar item={item} index={index} />
 
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+          <View className="flex-1 min-w-0">
+            <View className="flex-row items-center gap-[7px]">
               <Text
-                className="font-sans-bold"
+                className="font-sans-bold shrink text-[13.5px] tracking-[-0.25px] text-[#151233]"
                 numberOfLines={1}
-                style={{ flexShrink: 1, fontSize: 13.5, letterSpacing: -0.25, color: C.ink }}
               >
                 {item.name}
               </Text>
               <View
-                style={{
-                  backgroundColor: isAgent ? C.violetBg : C.slateBg,
-                  borderRadius: 999,
-                  paddingHorizontal: 7,
-                  paddingVertical: 2,
-                }}
+                className={`rounded-[999px] px-[7px] py-[2px] ${isAgent ? 'bg-[#ebe8ff]' : 'bg-[#eef0f6]'}`}
               >
                 <Text
-                  className="font-sans-bold"
-                  style={{
-                    fontSize: 9.5,
-                    letterSpacing: 0.5,
-                    color: isAgent ? C.violetDeep : C.slateInk,
-                  }}
+                  className={`font-sans-bold text-[9.5px] tracking-[0.5px] ${isAgent ? 'text-[#4a34c7]' : 'text-[#5b6178]'}`}
                 >
                   {(ROLE_LABELS[item.role] || item.role || '').toUpperCase()}
                 </Text>
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
-              <Text style={{ fontFamily: MONO, fontSize: 10, color: C.muted }}>{item.employee_id}</Text>
-              <Text className="font-sans" numberOfLines={1} style={{ flex: 1, fontSize: 11, color: C.sub }}>
+            <View className="flex-row items-center gap-[8px] mt-[3px]">
+              <Text className="font-[ui-monospace] text-[10px] text-[#9d9ac0]">{item.employee_id}</Text>
+              <Text className="font-sans flex-1 text-[11px] text-[#6d6a96]" numberOfLines={1}>
                 {item.phone || item.email}
               </Text>
             </View>
           </View>
 
-          <View style={{ backgroundColor: catBg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 }}>
-            <Text className="font-sans-bold" style={{ fontSize: 10.5, color: catInk }}>
+          <View className={`rounded-[999px] px-[10px] py-[5px] ${catBg}`}>
+            <Text maxFontSizeMultiplier={1.2} className={`font-sans-bold text-[10.5px] ${catInk}`}>
               {catLabel}
             </Text>
           </View>
@@ -466,24 +371,23 @@ export default function StaffScreen() {
 
   if (isError) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <View style={{ backgroundColor: C.dangerBg, padding: 16, borderRadius: 999, marginBottom: 16 }}>
+      <View className="flex-1 bg-[#f3f2fd] items-center justify-center p-[24px]">
+        <View className="bg-[#ffe1e1] p-[12px] std:p-[16px] rounded-[999px] mb-[16px]">
           <Feather name="alert-circle" size={32} color={C.dangerInk} />
         </View>
-        <Text className="font-sans-bold" style={{ fontSize: 20, color: C.ink, marginBottom: 8 }}>
+        <Text className="font-sans-bold text-[20px] text-[#151233] mb-[8px]">
           Unable to load staff
         </Text>
         <Text
-          className="font-sans"
-          style={{ fontSize: 13.5, lineHeight: 20, color: C.sub, textAlign: 'center', marginBottom: 28, paddingHorizontal: 16 }}
+          className="font-sans text-[13.5px] leading-[20px] text-[#6d6a96] text-center mb-[28px] px-[12px] std:px-[16px]"
         >
           {error?.message || 'Please check your connection and try again.'}
         </Text>
         <Pressable onPress={() => refetch()}>
           <View
-            style={{ backgroundColor: C.ink, paddingHorizontal: 32, paddingVertical: 15, borderRadius: 999 }}
+            className="bg-[#151233] px-[32px] py-[15px] rounded-[999px]"
           >
-            <Text className="font-sans-bold" style={{ fontSize: 14.5, color: C.bg }}>
+            <Text className="font-sans-bold text-[14.5px] text-[#f3f2fd]">
               Try Again
             </Text>
           </View>
@@ -493,31 +397,19 @@ export default function StaffScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <FlatList
+    <Screen className="bg-[#f3f2fd]">
+      <ScreenFlatList
         data={visible}
         keyExtractor={(item) => String(item.employee_row_id)}
-        contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 150 }}
-        showsVerticalScrollIndicator={false}
+        contentContainerClassName="p-[12px] std:p-[16px] pt-[12px]"
         ListHeaderComponent={<Header />}
         renderItem={renderItem}
         // the roster is one white card: rows sit inside it, hairline between
         CellRendererComponent={({ children, index, style, ...props }) => (
           <View
             {...props}
-            style={[
-              style,
-              {
-                backgroundColor: C.card,
-                borderTopLeftRadius: index === 0 ? 24 : 0,
-                borderTopRightRadius: index === 0 ? 24 : 0,
-                borderBottomLeftRadius: index === visible.length - 1 ? 24 : 0,
-                borderBottomRightRadius: index === visible.length - 1 ? 24 : 0,
-                paddingTop: index === 0 ? 6 : 0,
-                paddingBottom: index === visible.length - 1 ? 6 : 0,
-                paddingHorizontal: 4,
-              },
-            ]}
+            style={style}
+            className={`bg-[#ffffff] px-[4px] ${index === 0 ? 'rounded-tl-[24px] rounded-tr-[24px] pt-[6px]' : ''} ${index === visible.length - 1 ? 'rounded-bl-[24px] rounded-br-[24px] pb-[6px]' : ''}`}
           >
             {children}
           </View>
@@ -527,26 +419,17 @@ export default function StaffScreen() {
         }
         ListEmptyComponent={
           isLoading ? null : (
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
+            <View className="items-center justify-center py-[60px]">
               <View
-                style={{
-                  width: 84,
-                  height: 84,
-                  borderRadius: 999,
-                  backgroundColor: '#eae7fb',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 20,
-                }}
+                className="w-[84px] h-[84px] rounded-[999px] bg-[#eae7fb] items-center justify-center mb-[20px]"
               >
                 <Feather name="users" size={32} color={C.faint} />
               </View>
-              <Text className="font-sans-bold" style={{ fontSize: 16, color: C.ink, marginBottom: 6 }}>
+              <Text className="font-sans-bold text-[16px] text-[#151233] mb-[6px]">
                 {query || roleFilter !== 'ALL' ? 'Nobody matches that' : 'No staff members yet'}
               </Text>
               <Text
-                className="font-sans"
-                style={{ fontSize: 13, lineHeight: 19, color: C.sub, textAlign: 'center', paddingHorizontal: 40 }}
+                className="font-sans text-[13px] leading-[19px] text-[#6d6a96] text-center px-[40px]"
               >
                 {query || roleFilter !== 'ALL'
                   ? 'Try a different name, email or employee ID.'
@@ -557,51 +440,33 @@ export default function StaffScreen() {
         }
         ListFooterComponent={
           isLoading ? (
-            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+            <View className="py-[24px] items-center">
               <ActivityIndicator color={C.violetDeep} />
             </View>
           ) : pagination ? (
             <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 16,
-                paddingHorizontal: 4,
-              }}
+              className="flex-row items-center justify-between mt-[16px] px-[4px]"
             >
               <Pressable
                 onPress={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 999,
-                  backgroundColor: C.card,
-                  opacity: page === 1 ? 0.4 : 1,
-                }}
+                className={`px-[12px] std:px-[16px] py-[10px] rounded-[999px] bg-[#ffffff] ${page === 1 ? 'opacity-[0.4]' : 'opacity-100'}`}
               >
-                <Text className="font-sans-bold" style={{ fontSize: 12.5, color: C.inkSoft }}>
+                <Text className="font-sans-bold text-[12.5px] text-[#3a3670]">
                   Previous
                 </Text>
               </Pressable>
 
-              <Text style={{ fontFamily: MONO, fontSize: 11, color: C.muted }}>
+              <Text className="font-[ui-monospace] text-[11px] text-[#9d9ac0]">
                 {page} / {Math.max(1, Math.ceil(pagination.total / limit))}
               </Text>
 
               <Pressable
                 onPress={() => setPage((p) => p + 1)}
                 disabled={!hasNextPage}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 999,
-                  backgroundColor: C.card,
-                  opacity: !hasNextPage ? 0.4 : 1,
-                }}
+                className={`px-[12px] std:px-[16px] py-[10px] rounded-[999px] bg-[#ffffff] ${!hasNextPage ? 'opacity-[0.4]' : 'opacity-100'}`}
               >
-                <Text className="font-sans-bold" style={{ fontSize: 12.5, color: C.inkSoft }}>
+                <Text className="font-sans-bold text-[12.5px] text-[#3a3670]">
                   Next
                 </Text>
               </Pressable>
@@ -609,6 +474,16 @@ export default function StaffScreen() {
           ) : null
         }
       />
-    </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  shadow: {
+    shadowColor: '#151233',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+});

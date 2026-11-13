@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +18,7 @@ import { useUpdateRCA } from '../hooks/useTickets';
 import { haptics } from '../utils/haptics';
 import { FORM, T } from './ticketTheme';
 import { LightboxContent } from './ImageLightbox';
+import Sheet from './layout/Sheet';
 
 const MAX_IMAGES = 10;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -95,13 +95,13 @@ export default function TicketRCAForm({ ticket, onDone }) {
   };
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 34 }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-[34px]">
       {error ? (
         <Text style={FORM.errorText}>{error.message || 'That did not save. Please try again.'}</Text>
       ) : null}
 
       <View style={styles.intro}>
-        <View style={[styles.introChip, { backgroundColor: T.greenTint }]}>
+        <View style={styles.introChip}>
           <Feather name="search" size={16} color={T.green} />
         </View>
         <Text style={styles.introText}>
@@ -109,7 +109,7 @@ export default function TicketRCAForm({ ticket, onDone }) {
         </Text>
       </View>
 
-      <Text style={[FORM.label, { marginTop: 20 }]}>Cause and fix</Text>
+      <Text className="mt-[20px]" style={FORM.label}>Cause and fix</Text>
       <TextInput
         value={rcaText}
         onChangeText={setRcaText}
@@ -119,12 +119,12 @@ export default function TicketRCAForm({ ticket, onDone }) {
         style={FORM.textArea}
       />
 
-      <Text style={[FORM.label, { marginTop: 20 }]}>
+      <Text className="mt-[20px]" style={FORM.label}>
         Photos {totalImageCount > 0 ? `· ${totalImageCount} of ${MAX_IMAGES}` : '(optional)'}
       </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-[10px]">
         {existingImages.map((url) => (
-          <View key={url} style={{ position: 'relative' }}>
+          <View key={url} className="relative">
              <TouchableOpacity activeOpacity={0.85} onPress={() => setLightboxUrl(url)}>
               <Image source={{ uri: url }} style={styles.thumb} />
             </TouchableOpacity>
@@ -134,7 +134,7 @@ export default function TicketRCAForm({ ticket, onDone }) {
           </View>
         ))}
         {newImages.map((img) => (
-          <View key={img.uri} style={{ position: 'relative' }}>
+          <View key={img.uri} className="relative">
             <TouchableOpacity activeOpacity={0.85} onPress={() => setLightboxUrl(img.uri)}>
               <Image source={{ uri: img.uri }} style={styles.thumb} />
             </TouchableOpacity>
@@ -149,7 +149,7 @@ export default function TicketRCAForm({ ticket, onDone }) {
         </Pressable>
       </ScrollView>
 
-      <Pressable onPress={handleSave} disabled={isPending} style={[FORM.primary, { marginTop: 24 }, isPending && FORM.disabled]}>
+      <Pressable onPress={handleSave} disabled={isPending} className="mt-[24px]" style={[FORM.primary, isPending && FORM.disabled]}>
         {isPending ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
@@ -161,16 +161,24 @@ export default function TicketRCAForm({ ticket, onDone }) {
       </Pressable>
 
       <Text style={styles.footNote}>The customer sees this in the chat as soon as you publish.</Text>
-       <Modal visible={!!lightboxUrl} transparent={false} animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+      <Sheet
+        visible={!!lightboxUrl}
+        onClose={() => setLightboxUrl(null)}
+        variant="full"
+        edges={[]}
+        animationType="fade"
+        keyboard={false}
+        className="bg-black"
+      >
         <LightboxContent url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
-      </Modal>
+      </Sheet>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   intro: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: T.field, borderRadius: 18, padding: 14 },
-  introChip: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  introChip: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: T.greenTint },
   introText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: T.body },
 
   thumb: { width: 68, height: 68, borderRadius: 18, backgroundColor: T.field },

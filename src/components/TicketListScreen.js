@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   RefreshControl,
   Text,
   TouchableOpacity,
@@ -18,7 +17,8 @@ import { useTickets, useEscalatedTickets } from '../hooks/useTickets';
 import { useStatusGroupCount } from '../hooks/useStatusGroupCount';
 import { haptics } from '../utils/haptics';
 import { useAuthStore } from '../store/authStore';
-import { TicketCard, C, AVATAR_BG, AVATAR_INK, initialsOf, paletteIndex } from './TicketCard';
+import { TicketCard, C, AVATAR_BG_CLASS, AVATAR_INK_CLASS, initialsOf, paletteIndex } from './TicketCard';
+import Screen, { ScreenFlatList } from './layout/Screen';
 import CustomerSettingsSheet from './CustomerSettingsSheet';
 import TicketSearchFilterBar, { DEFAULT_STATUS_OPTIONS } from './TicketSearchFilterBar';
 
@@ -181,8 +181,7 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
         case 'listMeta':
           return (
             <Text
-              className="font-sans"
-              style={{ fontSize: 12, color: C.inkFaint, paddingHorizontal: 16, marginBottom: 10 }}
+              className="font-sans text-[12px] px-[12px] std:px-[16px] mb-[10px] text-[#9D9AC0]"
             >
               {segmentLabel} · {tickets.length} ticket{tickets.length === 1 ? '' : 's'}
               {statusFilter.length > 0 ? ' · filtered' : ''} · last updated first
@@ -190,7 +189,7 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
           );
         case 'skeleton':
           return (
-            <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
+            <View className="px-[12px] std:px-[16px] pt-[6px]">
               <SkeletonList count={6} />
             </View>
           );
@@ -239,13 +238,11 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
   );
 
   return (
-    <View className="flex-1 mt-[35px]" style={{ backgroundColor: C.bg }}>
-      <FlatList
+    <Screen className="bg-[#F3F2FD]">
+      <ScreenFlatList
         data={listData}
         keyExtractor={(item) => item._key}
         stickyHeaderIndices={[1]}
-        contentContainerStyle={{ paddingBottom: 160 }}
-        showsVerticalScrollIndicator={false}
         renderItem={renderItem}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.1}
@@ -276,17 +273,16 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
                   fetchNextPage();
                 }}
                 activeOpacity={0.85}
-                className="items-center justify-center"
-                style={{ height: 46, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.track }}
+                className="items-center justify-center h-[46px] rounded-[999px] border bg-[#FFFFFF] border-[#EBE8FF]"
               >
-                <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.ink }}>
+                <Text className="font-sans-semibold text-[13px] text-[#151233]">
                   Load more
                 </Text>
               </TouchableOpacity>
             </View>
           ) : tickets.length > 0 ? (
             <View className="items-center py-6">
-              <Text className="font-sans" style={{ fontSize: 11.5, color: C.inkFaint }}>
+              <Text className="font-sans text-[11.5px] text-[#9D9AC0]">
                 You're all caught up
               </Text>
             </View>
@@ -295,7 +291,7 @@ export default function TicketListScreen({ basePath, statusGroup, ownership }) {
           )
         }
       />
-    </View>
+    </Screen>
   );
 }
 
@@ -313,44 +309,32 @@ function SummaryHeader({ user, atRiskCount, needsWorkCount, doneCount, riskAssig
       : 'All clear right now';
 
   return (
-    <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 14, paddingBottom: 14 }}>
-      <View className="flex-row items-center" style={{ gap: 11 }}>
+    <View className="px-[12px] std:px-[16px] pt-[12px] gap-[14px] pb-[14px]">
+      <View className="flex-row items-center gap-[11px]">
         <View
-          className="items-center justify-center"
-          style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: C.violetTintWarm }}
+          className="items-center justify-center w-[44px] h-[44px] rounded-[999px] bg-[#E6E1FF]"
         >
-          <Text className="font-sans-semibold" style={{ fontSize: 15, color: C.violetInk }}>
+          <Text className="font-sans-semibold text-[15px] text-[#4A34C7]">
             {(user?.name?.[0] || 'A').toUpperCase()}
           </Text>
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 17, color: C.ink }} numberOfLines={1}>
+        <View className="flex-1 min-w-0">
+          <Text className="font-sans-semibold text-[17px] text-[#151233]" numberOfLines={1}>
             Hello, {firstName}
           </Text>
-          <Text className="font-sans" style={{ fontSize: 11.5, color: C.inkMuted, marginTop: 2 }} numberOfLines={1}>
+          <Text className="font-sans text-[11.5px] mt-[2px] text-[#6D6A96]" numberOfLines={1}>
             {subline}
           </Text>
         </View>
         <TouchableOpacity
           activeOpacity={0.85}
-          className="items-center justify-center shadow-sm"
+          className="items-center justify-center shadow-sm w-[40px] h-[40px] rounded-[999px] bg-[#FFFFFF]"
           onPress={() => setSettingsVisible(true)}
-          style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: '#FFFFFF' }}
         >
           <Feather name="settings" size={18} color={C.ink} />
           {atRiskCount > 0 && (
             <View
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 9,
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                backgroundColor: C.violet,
-                borderWidth: 2,
-                borderColor: '#FFFFFF',
-              }}
+              className="absolute top-[8px] right-[9px] w-[8px] h-[8px] rounded-[999px] border-[2px] border-[#FFFFFF] bg-[#6C5CE7]"
             />
           )}
         </TouchableOpacity>
@@ -358,60 +342,41 @@ function SummaryHeader({ user, atRiskCount, needsWorkCount, doneCount, riskAssig
 
       <CustomerSettingsSheet visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
 
-      <View style={{ backgroundColor: C.violet, borderRadius: 30, padding: 20, overflow: 'hidden' }}>
+      <View className="rounded-[30px] p-[20px] overflow-hidden bg-[#6C5CE7]">
         <View
-          style={{
-            position: 'absolute',
-            right: -40,
-            top: -46,
-            width: 150,
-            height: 150,
-            borderRadius: 999,
-            backgroundColor: C.violetLight,
-          }}
+          className="absolute right-[-40px] top-[-46px] w-[150px] h-[150px] rounded-[999px] bg-[#8271EF]"
         />
         <View
-          style={{
-            position: 'absolute',
-            right: 26,
-            bottom: -56,
-            width: 110,
-            height: 110,
-            borderRadius: 999,
-            backgroundColor: C.violetDeep,
-          }}
+          className="absolute right-[26px] bottom-[-56px] w-[110px] h-[110px] rounded-[999px] bg-[#5A48D6]"
         />
         <Text
-          className="font-sans-semibold"
-          style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: C.violetTintWarm }}
+          className="font-sans-semibold text-[10px] tracking-[1.2px] uppercase text-[#E6E1FF]"
         >
           {atRiskCount > 0 ? 'Triage first' : 'Desk status'}
         </Text>
-        <View className="flex-row items-end" style={{ gap: 8, marginTop: 6, marginBottom: 4 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 44, lineHeight: 46, color: '#FFFFFF' }}>
+        <View className="flex-row items-end gap-[8px] mt-[6px] mb-[4px]">
+          <Text className="font-sans-semibold text-[44px] leading-[46px] text-[#FFFFFF]">
             {atRiskCount}
           </Text>
-          <Text className="font-sans-semibold" style={{ fontSize: 15, color: C.violetTintWarm, paddingBottom: 7 }}>
+          <Text className="font-sans-semibold text-[15px] pb-[7px] text-[#E6E1FF]">
             ticket{atRiskCount === 1 ? '' : 's'} escalated
           </Text>
         </View>
         <Text
-          className="font-sans"
-          style={{ fontSize: 13, lineHeight: 19, color: C.violetTintWarm, maxWidth: 220, marginBottom: 16 }}
+          className="font-sans text-[13px] leading-[19px] max-w-[220px] mb-[16px] text-[#E6E1FF]"
         >
           {atRiskCount === 0
             ? 'Nothing escalated right now. You are ahead of the desk.'
             : `${atRiskCount} escalated ticket${atRiskCount > 1 ? 's' : ''} needing a response right now.`}
         </Text>
 
-        <View className="flex-row items-center" style={{ gap: 10 }}>
+        <View className="flex-row items-center gap-[10px]">
           <TouchableOpacity
             onPress={onStartTriage}
             activeOpacity={0.85}
-            className="flex-row items-center"
-            style={{ backgroundColor: C.ink, borderRadius: 999, paddingHorizontal: 18, minHeight: 44, gap: 8 }}
+            className="flex-row items-center rounded-[999px] px-[18px] min-h-[44px] gap-[8px] bg-[#151233]"
           >
-            <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.bg }}>
+            <Text className="font-sans-semibold text-[13px] text-[#F3F2FD]">
               {atRiskCount > 0 ? 'Start triage' : 'Review queue'}
             </Text>
             <Feather name="arrow-right" size={15} color={C.bg} />
@@ -424,18 +389,9 @@ function SummaryHeader({ user, atRiskCount, needsWorkCount, doneCount, riskAssig
                 return (
                   <View
                     key={name}
-                    className="items-center justify-center"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 999,
-                      marginLeft: i > 0 ? -8 : 0,
-                      borderWidth: 2,
-                      borderColor: C.violet,
-                      backgroundColor: AVATAR_BG[idx],
-                    }}
+                    className={`items-center justify-center w-[32px] h-[32px] rounded-[999px] border-[2px] ${i > 0 ? 'ml-[-8px]' : 'ml-0'} border-[#6C5CE7] ${AVATAR_BG_CLASS[idx]}`}
                   >
-                    <Text className="font-sans-semibold" style={{ fontSize: 10, color: AVATAR_INK[idx] }}>
+                    <Text className={`font-sans-semibold text-[10px] ${AVATAR_INK_CLASS[idx]}`}>
                       {initialsOf(name)}
                     </Text>
                   </View>
@@ -446,25 +402,23 @@ function SummaryHeader({ user, atRiskCount, needsWorkCount, doneCount, riskAssig
         </View>
       </View>
 
-      <View className="flex-row" style={{ gap: 11 }}>
-        <View style={{ flex: 1, backgroundColor: C.mint, borderRadius: 24, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 32, lineHeight: 34, color: C.mintInk }}>
+      <View className="flex-row gap-[11px]">
+        <View className="flex-1 rounded-[24px] px-[12px] std:px-[16px] pt-[16px] pb-[14px] bg-[#CCF7E4]">
+          <Text className="font-sans-semibold text-[32px] leading-[34px] text-[#0D6B4B]">
             {needsWorkCount}
           </Text>
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: C.mintInk2, marginTop: 5 }}
+            className="font-sans-semibold text-[10px] tracking-[1px] uppercase mt-[5px] text-[#0F7A56]"
           >
             Need work
           </Text>
         </View>
-        <View style={{ flex: 1, backgroundColor: C.marigold, borderRadius: 24, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14 }}>
-          <Text className="font-sans-semibold" style={{ fontSize: 32, lineHeight: 34, color: C.marigoldInk }}>
+        <View className="flex-1 rounded-[24px] px-[12px] std:px-[16px] pt-[16px] pb-[14px] bg-[#FFD166]">
+          <Text className="font-sans-semibold text-[32px] leading-[34px] text-[#6B4800]">
             {doneCount}
           </Text>
           <Text
-            className="font-sans-semibold"
-            style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: C.marigoldInk2, marginTop: 5 }}
+            className="font-sans-semibold text-[10px] tracking-[1px] uppercase mt-[5px] text-[#7A5200]"
           >
             Done
           </Text>
@@ -487,7 +441,7 @@ function StickyBar({
   setStatusFilter,
 }) {
   return (
-    <View style={{ backgroundColor: C.bg, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 12 }}>
+    <View className="px-[12px] std:px-[16px] pt-[8px] pb-[12px] gap-[12px] bg-[#F3F2FD]">
       <TicketSearchFilterBar
         searchValue={searchInput}
         onChangeSearch={setSearchInput}
@@ -497,7 +451,7 @@ function StickyBar({
         placeholder="Search ticket no., subject, assignee..."
       />
 
-      <View className="flex-row" style={{ backgroundColor: C.ink, borderRadius: 999, padding: 5, gap: 3 }}>
+      <View className="flex-row rounded-[999px] p-[5px] gap-[3px] bg-[#151233]">
         {SEGMENTS.map((segment) => {
           const isActive = activeSegment === segment.id;
           return (
@@ -505,16 +459,10 @@ function StickyBar({
               key={segment.id}
               onPress={() => setActiveSegment(segment.id)}
               activeOpacity={0.85}
-              className="flex-1 flex-row items-center justify-center"
-              style={{
-                borderRadius: 999,
-                paddingVertical: 10,
-                backgroundColor: isActive ? '#FDF8EE' : 'transparent',
-              }}
+              className={`flex-1 flex-row items-center justify-center rounded-[999px] py-[10px] ${isActive ? 'bg-[#FDF8EE]' : 'bg-transparent'}`}
             >
               <Text
-                className="font-sans-semibold"
-                style={{ fontSize: 13, color: isActive ? C.ink : '#C0B6A5' }}
+                className={`font-sans-semibold text-[13px] ${isActive ? 'text-[#151233]' : 'text-[#C0B6A5]'}`}
                 numberOfLines={1}
               >
                 {segment.label}
@@ -544,25 +492,17 @@ function AllClear({ query, segment, hasFilter }) {
   const label = SEGMENTS.find((s) => s.id === segment)?.label ?? 'this view';
   return (
     <View
-      style={{
-        backgroundColor: C.mint,
-        borderRadius: 26,
-        marginHorizontal: 16,
-        paddingVertical: 34,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-      }}
+      className="rounded-[26px] mx-[12px] std:mx-[16px] py-[34px] px-[24px] items-center bg-[#CCF7E4]"
     >
       <View
-        className="items-center justify-center"
-        style={{ width: 56, height: 56, borderRadius: 999, backgroundColor: C.bg, marginBottom: 14 }}
+        className="items-center justify-center w-[56px] h-[56px] rounded-[999px] mb-[14px] bg-[#F3F2FD]"
       >
         <Feather name="coffee" size={22} color={C.mintInk2} />
       </View>
-      <Text className="font-sans-semibold" style={{ fontSize: 19, color: C.mintInk, marginBottom: 4 }}>
+      <Text className="font-sans-semibold text-[19px] mb-[4px] text-[#0D6B4B]">
         All clear
       </Text>
-      <Text className="font-sans" style={{ fontSize: 13, color: C.mintInk2, textAlign: 'center' }}>
+      <Text className="font-sans text-[13px] text-center text-[#0F7A56]">
         {hasFilter ? `Nothing matches the selected filter in ${label}.` : `Nothing in ${label} right now.`}
       </Text>
     </View>

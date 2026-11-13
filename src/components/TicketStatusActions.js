@@ -14,18 +14,18 @@ const STAFF_ROLES = ['SUPPORT_AGENT', 'ADMIN'];
 // Each action carries the plain sentence a user would actually say.
 const STAFF_TRANSITIONS = {
   OPEN: [
-    { to: 'ESCALATED', label: 'Escalate', note: 'Hand to senior team', icon: 'arrow-up-circle', color: T.amberInk, tint: T.amberTint },
-    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: T.greenTint },
+    { to: 'ESCALATED', label: 'Escalate', note: 'Hand to senior team', icon: 'arrow-up-circle', color: T.amberInk, tint: 'bg-[#FEF1E7]' },
+    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: 'bg-[#DFF3EA]' },
   ],
   IN_PROGRESS: [
-    { to: 'ESCALATED', label: 'Escalate', note: 'Hand to senior team', icon: 'arrow-up-circle', color: T.amberInk, tint: T.amberTint },
-    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: T.greenTint },
+    { to: 'ESCALATED', label: 'Escalate', note: 'Hand to senior team', icon: 'arrow-up-circle', color: T.amberInk, tint: 'bg-[#FEF1E7]' },
+    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: 'bg-[#DFF3EA]' },
   ],
   ESCALATED: [
-    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: T.greenTint },
+    { to: 'RESOLVED', label: 'Mark resolved', note: 'Tell the customer it works', icon: 'check-circle', color: T.greenInk, tint: 'bg-[#DFF3EA]' },
   ],
   RESOLVED: [
-    { to: 'CLOSED', label: 'Close ticket', note: 'Locks the thread', icon: 'archive', color: T.body, tint: T.field },
+    { to: 'CLOSED', label: 'Close ticket', note: 'Locks the thread', icon: 'archive', color: T.body, tint: 'bg-[#F2F5F9]' },
   ],
 };
 
@@ -121,7 +121,7 @@ export default function TicketStatusActions({ ticket }) {
             note="Picks up where we left off"
             icon="rotate-ccw"
             color={T.violet}
-            tint={T.violetTint}
+            tint="bg-[#F0EAFB]"
             isLoading={isPending && pendingStatus === 'REOPENED'}
             disabled={isPending}
             onPress={() => setDialogTarget('REOPENED')}
@@ -155,10 +155,10 @@ function ActionRow({ label, note, icon, color, tint, isLoading, disabled, onPres
       disabled={disabled}
       style={[styles.row, disabled && styles.rowDisabled]}
     >
-      <View style={[styles.chip, { backgroundColor: tint }]}>
+      <View className={tint} style={styles.chip}>
         {isLoading ? <ActivityIndicator size="small" color={color} /> : <Feather name={icon} size={17} color={color} />}
       </View>
-      <View style={{ flex: 1 }}>
+      <View className="flex-1">
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowNote}>{note}</Text>
       </View>
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.field,
   },
   rowDisabled: { opacity: 0.5 },
-  chip: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  chip: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { fontSize: 14.5, fontWeight: '600', color: T.ink },
   rowNote: { fontSize: 11.5, color: T.muted, marginTop: 2 },
 });

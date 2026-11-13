@@ -1,6 +1,7 @@
 // src/components/ui/StatusBadge.js
 import { Text, View } from 'react-native';
 import { getStatusStyle, statusLabel } from '../../utils/ticketStatus';
+import { DENSE_FONT_SCALE } from '../layout/tokens';
 
 export default function StatusBadge({ status, size = 'md' }) {
   const { bg, text } = getStatusStyle(status);
@@ -12,7 +13,7 @@ export default function StatusBadge({ status, size = 'md' }) {
 
   return (
     <View className={`rounded-full ${sizeClasses} ${bg}`}>
-      <Text className={`font-sans-semibold ${textSizeClasses} uppercase ${text}`}>
+      <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} className={`font-sans-semibold ${textSizeClasses} uppercase ${text}`}>
         {statusLabel(status)}
       </Text>
     </View>

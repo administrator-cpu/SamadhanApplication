@@ -1,5 +1,6 @@
 // app/(admin)/customers/[id]/connections.js
-import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { ScreenScrollView } from '../../../../src/components/layout/Screen';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useCustomerConnections } from '../../../../src/hooks/useCustomers';
@@ -15,10 +16,12 @@ export default function CustomerConnections() {
       <Stack.Screen options={{ title: 'CRM Connections' }} />
 
       {isLoading ? (
-        <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#3b82f6" className="mt-[40px]" />
       ) : isError ? (
         <View style={styles.centerContainer}>
-          <Feather name="alert-circle" size={36} color="#ef4444" style={{ marginBottom: 12 }} />
+          <View className="mb-[12px]">
+            <Feather name="alert-circle" size={36} color="#ef4444" />
+          </View>
           <Text style={styles.errorText}>{error?.message || 'Failed to load connections.'}</Text>
         </View>
       ) : connections.length === 0 ? (
@@ -32,7 +35,7 @@ export default function CustomerConnections() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
+        <ScreenScrollView contentContainerClassName="p-[12px] std:p-[16px]">
           {connections.map((conn) => (
             <View key={conn.id} style={styles.card}>
               <View style={styles.cardHeader}>
@@ -54,7 +57,7 @@ export default function CustomerConnections() {
               <InfoRow label="B-End BTS" value={conn.bEndBtsId} />
             </View>
           ))}
-        </ScrollView>
+        </ScreenScrollView>
       )}
     </View>
   );

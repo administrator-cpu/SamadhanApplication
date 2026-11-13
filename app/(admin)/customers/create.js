@@ -1,8 +1,9 @@
 // app/(admin)/customers/create.js
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { Text, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCreateCustomer } from '../../../src/hooks/useCustomers';
+import Screen from '../../../src/components/layout/Screen';
 
 export default function CreateCustomer() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function CreateCustomer() {
   };
 
   return (
-    <View style={styles.container}>
+    <Screen scroll keyboard className="bg-white" contentContainerStyle={styles.content}>
       {error ? <Text style={styles.errorText}>{error.message || 'Failed to create customer.'}</Text> : null}
 
       <Text style={styles.label}>Full Name *</Text>
@@ -62,12 +63,12 @@ export default function CreateCustomer() {
       <Pressable onPress={handleSubmit} disabled={isPending} style={styles.submitButton}>
         {isPending ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.submitText}>Create Account</Text>}
       </Pressable>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff', padding: 20 },
+  content: { padding: 20 },
   errorText: { color: '#dc2626', fontSize: 13, marginBottom: 12 },
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6, marginTop: 14 },
   input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12, fontSize: 15 },

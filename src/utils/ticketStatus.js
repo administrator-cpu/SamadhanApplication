@@ -17,6 +17,16 @@ export const STATUS_DOT_COLORS = {
   REOPENED: '#A855F7',
 };
 
+// NativeWind class equivalents of STATUS_DOT_COLORS.
+export const STATUS_DOT_CLASSES = {
+  OPEN: 'bg-[#3B82F6]',
+  IN_PROGRESS: 'bg-[#8B5CF6]',
+  ESCALATED: 'bg-[#EF4444]',
+  RESOLVED: 'bg-[#10B981]',
+  CLOSED: 'bg-[#94A3B8]',
+  REOPENED: 'bg-[#A855F7]',
+};
+
 export function getStatusStyle(status) {
   return STATUS_STYLES[status] || STATUS_STYLES.CLOSED;
 }

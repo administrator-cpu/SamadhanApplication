@@ -1,6 +1,7 @@
 // src/components/calls/IncomingCallModal.js
-import React, { useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, Animated, Easing, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { View, Text, TouchableOpacity, Animated, Easing, StyleSheet } from 'react-native';
+import Sheet from '../layout/Sheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { Phone, PhoneOff, MessageSquare } from 'lucide-react-native';
@@ -33,16 +34,12 @@ function Blob({ color, opacity = 0.85, w = 190, h = 170 }) {
 }
 
 function Lobe({ style, color, opacity, t, phase }) {
-  const wander = (from, to) => t.interpolate({ inputRange: [0, 1], outputRange: phase ? [to, from] : [from, to] });
+  const drift = useMemo(() => {
+    const wander = (from, to) => t.interpolate({ inputRange: [0, 1], outputRange: phase ? [to, from] : [from, to] });
+    return { transform: [{ translateX: wander(-16, 18) }, { translateY: wander(14, -18) }, { scale: wander(1, 1.2) }] };
+  }, [t, phase]);
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.lobe,
-        style,
-        { transform: [{ translateX: wander(-16, 18) }, { translateY: wander(14, -18) }, { scale: wander(1, 1.2) }] },
-      ]}
-    >
+    <Animated.View pointerEvents="none" style={[styles.lobe, style, drift]}>
       <Blob color={color} opacity={opacity} />
     </Animated.View>
   );
@@ -124,18 +121,16 @@ function Halo({ delay, color }) {
     loop.start();
     return () => loop.stop();
   }, [t, delay]);
+  const ring = useMemo(
+    () => ({
+      borderColor: color,
+      opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
+      transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.28] }) }],
+    }),
+    [color, t],
+  );
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.halo,
-        {
-          borderColor: color,
-          opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
-          transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.28] }) }],
-        },
-      ]}
-    />
+    <Animated.View pointerEvents="none" style={[styles.halo, ring]} />
   );
 }
 
@@ -148,8 +143,7 @@ export default function IncomingCallModal({
   onMessage,
 }) {
   return (
-    <Modal animationType="slide" visible statusBarTranslucent>
-      <View style={styles.root}>
+    <Sheet visible variant="full" onClose={() => {}} keyboard={false} animationType="slide" className="bg-[#F7F6F3]">
         <LinearGradient
           colors={['rgba(255,214,180,0.72)', 'rgba(247,246,243,0)']}
           start={{ x: 0, y: 0 }}
@@ -214,14 +208,12 @@ export default function IncomingCallModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.paper },
-  frame: { flex: 1, paddingTop: 70, paddingHorizontal: 26, paddingBottom: 40 },
+  frame: { flex: 1, paddingTop: 24, paddingHorizontal: 26, paddingBottom: 24 },
 
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   chip: {

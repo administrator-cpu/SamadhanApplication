@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import Screen from '../../src/components/layout/Screen';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { authService } from '../../src/api/authService';
@@ -127,10 +127,8 @@ export default function ForgotPasswordScreen() {
     }`;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      className="flex-1 bg-bg-base"
-    >
+    <Screen edges={['top', 'bottom']} className="bg-bg-base">
+    <KeyboardAvoidingView behavior="padding" className="flex-1">
       <View className="flex-1 justify-center px-6 relative">
 
         {/* Back Button */}
@@ -139,7 +137,7 @@ export default function ForgotPasswordScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
           hitSlop={8}
-          className="absolute top-16 left-4 p-3 rounded-full active:bg-bg-subtle z-10"
+          className="absolute top-[12px] left-4 p-3 rounded-full active:bg-bg-subtle z-10"
         >
           <Feather name="arrow-left" size={24} color="#6B6255" />
         </Pressable>
@@ -316,7 +314,9 @@ export default function ForgotPasswordScreen() {
               </View>
 
               <View className="bg-bg-subtle rounded-sm p-3 mb-6 flex-row">
-                <Feather name="shield" size={16} color="#6B6255" style={{ marginTop: 2 }} />
+                <View className="mt-[2px]">
+                  <Feather name="shield" size={16} color="#6B6255" />
+                </View>
                 <Text className="font-sans text-text-secondary text-xs ml-2 flex-1 leading-relaxed">
                   Must be 8+ characters and include uppercase, lowercase, a number, and a special character.
                 </Text>
@@ -328,6 +328,7 @@ export default function ForgotPasswordScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    </Screen>
   );
 }
 

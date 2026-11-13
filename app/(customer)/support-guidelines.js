@@ -4,9 +4,9 @@ import {
   View, 
   Text, 
   ScrollView, 
-  StyleSheet, 
-  Platform 
+  StyleSheet,
 } from 'react-native';
+import Screen from '../../src/components/layout/Screen';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 // --- DATA MODELS ---
@@ -17,6 +17,8 @@ const severityLevels = [
     icon: 'alert-circle',
     color: '#ef4444', // Red
     bgLight: '#fef2f2',
+    bgClass: 'bg-[#fef2f2]',
+    textClass: 'text-[#ef4444]',
     description: 'Complete service outage or business-critical functionality unavailable. No workaround exists.',
     response: 'Immediate',
     resolution: '2-4 hours',
@@ -27,6 +29,8 @@ const severityLevels = [
     icon: 'alert-triangle',
     color: '#f97316', // Orange
     bgLight: '#fff7ed',
+    bgClass: 'bg-[#fff7ed]',
+    textClass: 'text-[#f97316]',
     description: 'Partial service degradation or issue affecting a limited number of users. Workaround available.',
     response: 'Immediate',
     resolution: '4-6 hours',
@@ -37,6 +41,8 @@ const severityLevels = [
     icon: 'info',
     color: '#eab308', // Yellow/Amber
     bgLight: '#fefce8',
+    bgClass: 'bg-[#fefce8]',
+    textClass: 'text-[#eab308]',
     description: 'Minor issue, cosmetic defect, or information request. No significant business impact.',
     response: 'Immediate',
     resolution: 'Standard',
@@ -75,7 +81,7 @@ const escalationMatrix = [
 
 export default function SupportGuidelines() {
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <Screen scroll className="bg-[#f8fafc]">
       
       {/* HEADER PAGE */}
       <View style={styles.header}>
@@ -102,7 +108,7 @@ export default function SupportGuidelines() {
           {severityLevels.map((item) => (
             <View key={item.id} style={styles.severityCard}>
               <View style={styles.sevCardHeader}>
-                <View style={[styles.sevIconWrap, { backgroundColor: item.bgLight }]}>
+                <View className={item.bgClass} style={styles.sevIconWrap}>
                   <Feather name={item.icon} size={18} color={item.color} />
                 </View>
                 <Text style={styles.sevTitle}>{item.title}</Text>
@@ -121,8 +127,8 @@ export default function SupportGuidelines() {
               
               <View style={styles.sevMetricRow}>
                 <Text style={styles.sevMetricLabel}>RESOLUTION</Text>
-                <View style={[styles.badgeColor, { backgroundColor: item.bgLight }]}>
-                  <Text style={[styles.badgeTextColor, { color: item.color }]}>{item.resolution}</Text>
+                <View className={item.bgClass} style={styles.badgeColor}>
+                  <Text className={item.textClass} style={styles.badgeTextColor}>{item.resolution}</Text>
                 </View>
               </View>
             </View>
@@ -162,7 +168,7 @@ export default function SupportGuidelines() {
               {/* Matrix Data Rows */}
               <MatrixDataRow label="Responsibility" value={item.responsibility} />
               <MatrixDataRow label="Escalation Trigger" value={item.trigger} 
-                highlight={item.trigger.includes('4 hours') || item.trigger.includes('6 hours') ? '#ef4444' : null} 
+                highlight={item.trigger.includes('4 hours') || item.trigger.includes('6 hours')}
               />
               <MatrixDataRow label="Communication" value={item.comms} />
 
@@ -171,7 +177,7 @@ export default function SupportGuidelines() {
         </View>
       </View>
 
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -187,7 +193,7 @@ function MatrixDataRow({ label, value, highlight }) {
       <Text style={styles.matrixValue}>
         {parts.map((part, i) => 
           (part.toLowerCase() === '4 hours' || part.toLowerCase() === '6 hours') 
-            ? <Text key={i} style={{ color: highlight, fontWeight: '700' }}>{part}</Text> 
+            ? <Text key={i} className="font-bold text-[#ef4444]">{part}</Text> 
             : part
         )}
       </Text>
@@ -209,7 +215,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: 16,
     paddingBottom: 24,
   },
   headerTitle: {

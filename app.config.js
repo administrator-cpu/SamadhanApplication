@@ -25,6 +25,7 @@ export default ({ config }) => {
     name: envConfig.name,
     slug: "samadhan",
     icon: "./assets/icon.png",
+    orientation: "portrait",
     newArchEnabled: true,
     android: {
       package: envConfig.androidPackage,
@@ -44,6 +45,8 @@ export default ({ config }) => {
     },
     ios: {
       bundleIdentifier: envConfig.androidPackage,
+      supportsTablet: false,
+      requireFullScreen: true,
       infoPlist: {
         NSCameraUsageDescription: 'Samadhan needs camera access so you can attach a photo of the issue to your ticket.',
         NSMicrophoneUsageDescription: 'Samadhan needs microphone access to make and receive calls.',

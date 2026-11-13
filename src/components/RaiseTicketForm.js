@@ -8,15 +8,13 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View, StyleSheet,
 } from 'react-native';
+import Screen, { ScreenScrollView, StickyFooter } from './layout/Screen';
 import { useConnectionsByEmail, useMyConnections } from '../hooks/useCustomers';
 import { useCategories, useCreateTicket } from '../hooks/useTickets';
 import { haptics } from '../utils/haptics';
@@ -47,23 +45,8 @@ const C = {
   dangerInk: '#b0233f',
 };
 
-const MONO = 'ui-monospace';
-
-const SHADOW_SM = {
-  shadowColor: '#151233',
-  shadowOpacity: 0.06,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 2,
-};
-
-const SHADOW_LG = {
-  shadowColor: '#151233',
-  shadowOpacity: 0.14,
-  shadowRadius: 22,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 6,
-};
+// Sticky submit bar height (~76) + its gap, so focused inputs clear it.
+const SUBMIT_BAR_SPACE = 110;
 
 function iconForCategory(cat) {
   const key = `${cat?.code || ''} ${cat?.name || ''}`.toLowerCase();
@@ -88,29 +71,22 @@ function formatBandwidth(bandwidth) {
 function SectionLabel({ children, required, meta }) {
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        justifyContent: meta ? 'space-between' : 'flex-start',
-        gap: 7,
-        paddingHorizontal: 4,
-      }}
+      className={`flex-row items-baseline gap-[7px] px-[4px] ${meta ? 'justify-between' : 'justify-start'}`}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 7 }}>
+      <View className="flex-row items-baseline gap-[7px]">
         <Text
-          className="font-sans-semibold"
-          style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.sub }}
+          className="font-sans-semibold text-[10.5px] tracking-[1.4px] uppercase text-[#6d6a96]"
         >
           {children}
         </Text>
         {required ? (
-          <Text className="font-sans-semibold" style={{ fontSize: 10.5, color: C.violet }}>
+          <Text className="font-sans-semibold text-[10.5px] text-[#6c5ce7]">
             Required
           </Text>
         ) : null}
       </View>
       {meta ? (
-        <Text style={{ fontFamily: MONO, fontSize: 10.5, color: C.muted }}>{meta}</Text>
+        <Text className="font-[ui-monospace] text-[10.5px] text-[#9d9ac0]">{meta}</Text>
       ) : null}
     </View>
   );
@@ -119,17 +95,12 @@ function SectionLabel({ children, required, meta }) {
 function ErrorBanner({ children }) {
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 9,
-        backgroundColor: C.dangerBg,
-        borderRadius: 18,
-        padding: 14,
-      }}
+      className="flex-row items-start gap-[9px] bg-[#fee7ea] rounded-[18px] p-[14px]"
     >
-      <Feather name="alert-circle" size={17} color={C.dangerInk} style={{ marginTop: 1 }} />
-      <Text className="font-sans-medium" style={{ flex: 1, fontSize: 13, lineHeight: 19, color: C.dangerInk }}>
+      <View className="mt-[1px]">
+        <Feather name="alert-circle" size={17} color={C.dangerInk} />
+      </View>
+      <Text className="font-sans-medium flex-1 text-[13px] leading-[19px] text-[#b0233f]">
         {children}
       </Text>
     </View>
@@ -357,35 +328,30 @@ export default function RaiseTicketForm({ role, listPath }) {
     : 'Required';
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    <Screen className="bg-[#f3f2fd]">
       {/* Conversational header */}
-      <View style={{ paddingTop: 34, paddingBottom: 6, paddingHorizontal: 20 }}>
+      <View className="pt-[10px] pb-[6px] px-[16px] std:px-[20px]">
         <Text
-          className="font-sans-semibold"
-          style={{ fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: C.violetDeep }}
+          className="font-sans-semibold text-[10.5px] tracking-[1.4px] uppercase text-[#4a34c7]"
         >
           New ticket
         </Text>
         <Text
-          className="font-sans-semibold"
-          style={{ fontSize: 29, lineHeight: 34, color: C.ink, marginTop: 4 }}
+          className="font-sans-semibold text-[29px] leading-[34px] text-[#151233] mt-[4px]"
         >
           {headerTitle}
         </Text>
-        <Text className="font-sans" style={{ fontSize: 13, lineHeight: 19, color: C.sub, marginTop: 6 }}>
+        <Text className="font-sans text-[13px] leading-[19px] text-[#6d6a96] mt-[6px]">
           {headerSubtitle}
         </Text>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 170, gap: 18 }}
-        keyboardShouldPersistTaps="handled"
+      <ScreenScrollView
+        className="flex-1"
+        keyboard
+        keyboardOffset={isVerified ? SUBMIT_BAR_SPACE : 24}
+        endSpace={isVerified ? SUBMIT_BAR_SPACE : 24}
+        contentContainerClassName="px-[12px] std:px-[16px] pt-[18px] gap-[18px]"
       >
         {/* ---------------- SALES: STEP 1 — VERIFICATION ---------------- */}
         {isSales && !isVerified && (
@@ -402,23 +368,11 @@ export default function RaiseTicketForm({ role, listPath }) {
               </ErrorBanner>
             )}
 
-            <View style={{ gap: 10 }}>
+            <View className="gap-[10px]">
               <SectionLabel required>Customer email</SectionLabel>
               <View
-                style={[
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                    backgroundColor: C.card,
-                    borderRadius: 999,
-                    borderWidth: 1.5,
-                    borderColor: emailFocused ? C.violet : 'transparent',
-                    paddingHorizontal: 16,
-                    minHeight: 54,
-                  },
-                  SHADOW_SM,
-                ]}
+                className={`flex-row items-center gap-[10px] bg-[#ffffff] rounded-[999px] border-[1.5px] px-[12px] std:px-[16px] min-h-[54px] ${emailFocused ? 'border-[#6c5ce7]' : 'border-transparent'}`}
+                style={sx.shadowSm}
               >
                 <Feather name="mail" size={16} color={C.muted} />
                 <TextInput
@@ -435,8 +389,7 @@ export default function RaiseTicketForm({ role, listPath }) {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   editable={!verifyMutation.isPending}
-                  className="font-sans"
-                  style={{ flex: 1, minWidth: 0, fontSize: 14, color: C.ink, paddingVertical: 14 }}
+                  className="font-sans flex-1 min-w-0 text-[14px] text-[#151233] py-[14px]"
                 />
               </View>
             </View>
@@ -445,24 +398,14 @@ export default function RaiseTicketForm({ role, listPath }) {
               activeOpacity={0.88}
               onPress={handleVerify}
               disabled={verifyMutation.isPending}
-              style={[
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  minHeight: 54,
-                  borderRadius: 999,
-                  backgroundColor: verifyMutation.isPending ? C.violetDim : C.violet,
-                },
-                verifyMutation.isPending ? null : SHADOW_LG,
-              ]}
+              className={`flex-row items-center justify-center gap-[8px] min-h-[54px] rounded-[999px] ${verifyMutation.isPending ? 'bg-[#d8d5f0]' : 'bg-[#6c5ce7]'}`}
+              style={verifyMutation.isPending ? undefined : sx.shadowLg}
             >
               {verifyMutation.isPending ? (
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <>
-                  <Text className="font-sans-semibold" style={{ fontSize: 14.5, color: '#ffffff' }}>
+                  <Text className="font-sans-semibold text-[14.5px] text-[#ffffff]">
                     Verify customer
                   </Text>
                   <Feather name="arrow-up-right" size={15} color="#ffffff" />
@@ -484,32 +427,17 @@ export default function RaiseTicketForm({ role, listPath }) {
             )}
 
             {isSales && (
-              <View
-                style={[
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    backgroundColor: C.violetSoft,
-                    borderRadius: 20,
-                    paddingHorizontal: 16,
-                    paddingVertical: 14,
-                  },
-                ]}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 }}>
+              <View className="flex-row items-center justify-between gap-[12px] bg-[#ebe8ff] rounded-[20px] px-[12px] std:px-[16px] py-[14px]">
+                <View className="flex-row items-center gap-[9px] flex-1 min-w-0">
                   <Feather name="check-circle" size={16} color={C.violetDeep} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
+                  <View className="flex-1 min-w-0">
                     <Text
-                      className="font-sans-semibold"
-                      style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: C.violetDeep }}
+                      className="font-sans-semibold text-[10px] tracking-[1.2px] uppercase text-[#4a34c7]"
                     >
                       Verified customer
                     </Text>
                     <Text
-                      className="font-sans-semibold"
-                      style={{ fontSize: 13, color: C.ink, marginTop: 2 }}
+                      className="font-sans-semibold text-[13px] text-[#151233] mt-[2px]"
                       numberOfLines={1}
                     >
                       {verifiedEmail}
@@ -517,7 +445,7 @@ export default function RaiseTicketForm({ role, listPath }) {
                   </View>
                 </View>
                 <TouchableOpacity onPress={handleResetVerification} activeOpacity={0.7}>
-                  <Text className="font-sans-semibold" style={{ fontSize: 13, color: C.violetDeep }}>
+                  <Text className="font-sans-semibold text-[13px] text-[#4a34c7]">
                     Change
                   </Text>
                 </TouchableOpacity>
@@ -525,15 +453,15 @@ export default function RaiseTicketForm({ role, listPath }) {
             )}
 
             {/* Category — full grid, nothing hidden off-screen */}
-            <View style={{ gap: 10 }}>
+            <View className="gap-[10px]">
               <SectionLabel required>Category</SectionLabel>
 
               {categoriesLoading ? (
-                <View style={{ height: 56, alignItems: 'center', justifyContent: 'center' }}>
+                <View className="h-[56px] items-center justify-center">
                   <ActivityIndicator color={C.violet} />
                 </View>
               ) : (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
+                <View className="flex-row flex-wrap gap-[9px]">
                   {(categories || []).map((cat) => {
                     const isSelected = category?.id === cat.id;
                     return (
@@ -541,18 +469,7 @@ export default function RaiseTicketForm({ role, listPath }) {
                         key={cat.id}
                         activeOpacity={0.85}
                         onPress={() => setCategory(cat)}
-                        style={{
-                          width: '48.4%',
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 9,
-                          minHeight: 52,
-                          padding: 12,
-                          borderRadius: 18,
-                          borderWidth: 1.5,
-                          borderColor: isSelected ? C.ink : C.rule,
-                          backgroundColor: isSelected ? C.ink : C.card,
-                        }}
+                        className={`w-[48.4%] flex-row items-center gap-[9px] min-h-[52px] p-[12px] rounded-[18px] border-[1.5px] ${isSelected ? 'border-[#151233] bg-[#151233]' : 'border-[#eeecf9] bg-[#ffffff]'}`}
                       >
                         <Feather
                           name={iconForCategory(cat)}
@@ -560,14 +477,7 @@ export default function RaiseTicketForm({ role, listPath }) {
                           color={isSelected ? C.idle : C.sub}
                         />
                         <Text
-                          className="font-sans-semibold"
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: 12.5,
-                            lineHeight: 15,
-                            color: isSelected ? '#ffffff' : C.ink,
-                          }}
+                          className={`font-sans-semibold flex-1 min-w-0 text-[12.5px] leading-[15px] ${isSelected ? 'text-[#ffffff]' : 'text-[#151233]'}`}
                         >
                           {cat.name}
                         </Text>
@@ -579,55 +489,29 @@ export default function RaiseTicketForm({ role, listPath }) {
             </View>
 
             {/* Affected circuit */}
-            <View style={{ gap: 10 }}>
+            <View className="gap-[10px]">
               <SectionLabel required>Affected circuit</SectionLabel>
               <Pressable
                 onPress={() => setCircuitPickerOpen(true)}
 
-                style={({ pressed }) => [
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    backgroundColor: C.card,
-                    borderRadius: 20,
-                    padding: 14,
-                    minHeight: 64,
-                    opacity: pressed ? 0.9 : 1,
-                  },
-                  SHADOW_SM,
-                ]}
-                className={`flex-row gap-[12px] p-[14px] rounded-[12px] min-h-[64px] bg-white`}
+                style={sx.shadowSm}
+                className="flex-row items-center gap-[12px] bg-[#ffffff] rounded-[20px] p-[14px] min-h-[64px] active:opacity-90"
               >
                 <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 13,
-                    backgroundColor: C.violetSoft,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  className="w-[38px] h-[38px] rounded-[13px] bg-[#ebe8ff] items-center justify-center"
 
                 >
                   <Feather name="server" size={17} color={C.violetDeep} />
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }} >
+                <View className="flex-1 min-w-0" >
                   <Text
-                    style={{
-                      fontFamily: MONO,
-                      fontWeight: '700',
-                      fontSize: 14,
-                      letterSpacing: -0.3,
-                      color: selectedCircuit ? C.ink : C.muted,
-                    }}
+                    className={`font-[ui-monospace] font-bold text-[14px] tracking-[-0.3px] ${selectedCircuit ? 'text-[#151233]' : 'text-[#9d9ac0]'}`}
                     numberOfLines={1}
                   >
                     {selectedCircuit ? selectedCircuit.fabCircuitId : 'Choose the affected circuit'}
                   </Text>
                   <Text
-                    className="font-sans-medium"
-                    style={{ fontSize: 11, color: C.muted, marginTop: 3 }}
+                    className="font-sans-medium text-[11px] text-[#9d9ac0] mt-[3px]"
                     numberOfLines={1}
                   >
                     {circuitMeta}
@@ -646,19 +530,11 @@ export default function RaiseTicketForm({ role, listPath }) {
             </View>
 
             {/* Description */}
-            <View style={{ gap: 10 }}>
+            <View className="gap-[10px]">
               <SectionLabel meta={`${message.length}/${MAX_MESSAGE}`}>What is happening</SectionLabel>
               <View
-                style={[
-                  {
-                    backgroundColor: C.card,
-                    borderRadius: 20,
-                    borderWidth: 1.5,
-                    borderColor: messageFocused ? C.violet : 'transparent',
-                    padding: 14,
-                  },
-                  SHADOW_SM,
-                ]}
+                className={`bg-[#ffffff] rounded-[20px] border-[1.5px] p-[14px] ${messageFocused ? 'border-[#6c5ce7]' : 'border-transparent'}`}
+                style={sx.shadowSm}
               >
                 <TextInput
                   value={message}
@@ -670,34 +546,20 @@ export default function RaiseTicketForm({ role, listPath }) {
                   placeholderTextColor={C.muted}
                   multiline
                   textAlignVertical="top"
-                  className="font-sans"
-                  style={{ minHeight: 104, fontSize: 13.5, lineHeight: 20, color: C.ink }}
+                  className="font-sans min-h-[104px] text-[13.5px] leading-[20px] text-[#151233]"
                 />
               </View>
             </View>
 
             {/* CC emails */}
-            <View style={{ gap: 10 }}>
+            <View className="gap-[10px]">
               <SectionLabel meta={`${alternateEmails.length}/${MAX_ALTERNATE_EMAILS}`}>
                 Keep in the loop
               </SectionLabel>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View className="flex-row gap-[10px]">
                 <View
-                  style={[
-                    {
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                      backgroundColor: C.card,
-                      borderRadius: 999,
-                      borderWidth: 1.5,
-                      borderColor: ccFocused ? C.violet : 'transparent',
-                      paddingHorizontal: 16,
-                      minHeight: 52,
-                    },
-                    SHADOW_SM,
-                  ]}
+                  className={`flex-1 flex-row items-center gap-[10px] bg-[#ffffff] rounded-[999px] border-[1.5px] px-[12px] std:px-[16px] min-h-[52px] ${ccFocused ? 'border-[#6c5ce7]' : 'border-transparent'}`}
+                  style={sx.shadowSm}
                 >
                   <Feather name="mail" size={16} color={C.muted} />
                   <TextInput
@@ -710,58 +572,32 @@ export default function RaiseTicketForm({ role, listPath }) {
                     autoCapitalize="none"
                     keyboardType="email-address"
                     onSubmitEditing={addAlternateEmail}
-                    className="font-sans"
-                    style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: C.ink, paddingVertical: 13 }}
+                    className="font-sans flex-1 min-w-0 text-[13.5px] text-[#151233] py-[13px]"
                   />
                 </View>
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={addAlternateEmail}
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 26,
-                    backgroundColor: C.ink,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  className="w-[52px] h-[52px] rounded-[26px] bg-[#151233] items-center justify-center"
                 >
                   <Feather name="plus" size={18} color={C.bg} />
                 </TouchableOpacity>
               </View>
 
               {alternateEmails.length > 0 && (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <View className="flex-row flex-wrap gap-[8px]">
                   {alternateEmails.map((email) => (
                     <View
                       key={email}
-                      style={[
-                        {
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 8,
-                          backgroundColor: C.card,
-                          borderRadius: 999,
-                          paddingLeft: 14,
-                          paddingRight: 10,
-                          paddingVertical: 8,
-                        },
-                        SHADOW_SM,
-                      ]}
+                      className="flex-row items-center gap-[8px] bg-[#ffffff] rounded-[999px] pl-[14px] pr-[10px] py-[8px]"
+                      style={sx.shadowSm}
                     >
-                      <Text className="font-sans-medium" style={{ fontSize: 12, color: C.inkSoft }}>
+                      <Text className="font-sans-medium text-[12px] text-[#3a3670]">
                         {email}
                       </Text>
                       <Pressable
                         onPress={() => removeAlternateEmail(email)}
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 11,
-                          backgroundColor: C.bg,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
+                        className="w-[22px] h-[22px] rounded-[11px] bg-[#f3f2fd] items-center justify-center"
                       >
                         <Feather name="x" size={12} color={C.sub} />
                       </Pressable>
@@ -772,39 +608,22 @@ export default function RaiseTicketForm({ role, listPath }) {
             </View>
 
             {/* Attachments */}
-            <View style={{ gap: 10 }}>
+            <View className="gap-[10px]">
               <SectionLabel meta={`${images.length}/${MAX_IMAGES}`}>Screenshots</SectionLabel>
 
               {images.length > 0 && (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                <View className="flex-row flex-wrap gap-[12px]">
                   {images.map((img) => (
-                    <View key={img.uri} style={{ width: 80, height: 80 }}>
+                    <View key={img.uri} className="w-[80px] h-[80px]">
                       <Image
                         source={{ uri: img.uri }}
-                        style={{
-                          width: 80,
-                          height: 80,
-                          borderRadius: 16,
-                          backgroundColor: C.violetSoft,
-                        }}
+                        className="w-[80px] h-[80px] rounded-[16px] bg-[#ebe8ff]"
                         contentFit="cover"
                         cachePolicy="memory-disk"
                       />
                       <Pressable
                         onPress={() => removeImage(img.uri)}
-                        style={{
-                          position: 'absolute',
-                          top: -6,
-                          right: -6,
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          backgroundColor: C.dangerInk,
-                          borderWidth: 2.5,
-                          borderColor: C.bg,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
+                        className="absolute top-[-6px] right-[-6px] w-[24px] h-[24px] rounded-[12px] bg-[#b0233f] border-[2.5px] border-[#f3f2fd] items-center justify-center"
                       >
                         <Feather name="x" size={11} color="#ffffff" />
                       </Pressable>
@@ -814,50 +633,24 @@ export default function RaiseTicketForm({ role, listPath }) {
               )}
 
               {images.length < MAX_IMAGES && (
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View className="flex-row gap-[10px]">
 
                   <Pressable
                     onPress={pickImages}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      minHeight: 58,
-                      borderRadius: 18,
-                      borderWidth: 1.5,
-                      borderStyle: 'dashed',
-                      borderColor: C.violetDim,
-                      backgroundColor: pressed ? C.field : C.card,
-                    })}
-                    className='flex-row items-center justify-center gap-2 min-h-[58px] rounded-[18px] border-dashed border bg-white flex-1 border-[#d8d5f0]'
+                    className="flex-1 flex-row items-center justify-center gap-[8px] min-h-[58px] rounded-[18px] border-[1.5px] border-dashed border-[#d8d5f0] bg-[#ffffff] active:bg-[#f7f6ff]"
                   >
                     <Feather name="image" size={17} color={C.violetDeep} />
-                    <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.violetDeep }}>
+                    <Text className="font-sans-semibold text-[12.5px] text-[#4a34c7]">
                       Gallery
                     </Text>
                   </Pressable>
 
                   <Pressable
                     onPress={captureImage}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      minHeight: 58,
-                      borderRadius: 18,
-                      borderWidth: 1.5,
-                      borderStyle: 'dashed',
-                      borderColor: C.violetDim,
-                      backgroundColor: pressed ? C.field : C.card,
-                    })}
-                    className='flex-row items-center justify-center gap-2 min-h-[58px] rounded-[18px] border-dashed border bg-white flex-1 border-[#d8d5f0]'
+                    className="flex-1 flex-row items-center justify-center gap-[8px] min-h-[58px] rounded-[18px] border-[1.5px] border-dashed border-[#d8d5f0] bg-[#ffffff] active:bg-[#f7f6ff]"
                   >
                     <Feather name="camera" size={17} color={C.violetDeep} />
-                    <Text className="font-sans-semibold" style={{ fontSize: 12.5, color: C.violetDeep }}>
+                    <Text className="font-sans-semibold text-[12.5px] text-[#4a34c7]">
                       Camera
                     </Text>
                   </Pressable>
@@ -866,38 +659,23 @@ export default function RaiseTicketForm({ role, listPath }) {
             </View>
           </>
         )}
-      </ScrollView>
+      </ScreenScrollView>
 
       {/* Sticky submit bar — states what is still missing instead of a dead button */}
       {isVerified && (
+        <StickyFooter className="px-[14px]">
         <View
-          style={[
-            {
-              position: 'absolute',
-              left: 14,
-              right: 14,
-              bottom: 24,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-              backgroundColor: C.card,
-              borderRadius: 28,
-              paddingLeft: 18,
-              padding: 12,
-            },
-            SHADOW_LG,
-          ]}
+          className="flex-row items-center gap-[12px] bg-[#ffffff] rounded-[28px] p-[12px] pl-[18px]"
+          style={sx.shadowLg}
         >
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View className="flex-1 min-w-0">
             <Text
-              className="font-sans-semibold"
-              style={{ fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: C.muted }}
+              className="font-sans-semibold text-[10px] tracking-[1.4px] uppercase text-[#9d9ac0]"
             >
               Ticket
             </Text>
             <Text
-              className="font-sans-semibold"
-              style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}
+              className="font-sans-semibold text-[12px] text-[#3a3670] mt-[3px]"
               numberOfLines={1}
             >
               {submitLine}
@@ -907,24 +685,14 @@ export default function RaiseTicketForm({ role, listPath }) {
             activeOpacity={0.88}
             onPress={handleSubmit}
             disabled={isPending}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              minHeight: 52,
-              paddingHorizontal: 20,
-              borderRadius: 999,
-              backgroundColor: ready && !isPending ? C.violet : C.violetDim,
-            }}
+            className={`flex-row items-center justify-center gap-[8px] min-h-[52px] px-[16px] std:px-[20px] rounded-[999px] ${ready && !isPending ? 'bg-[#6c5ce7]' : 'bg-[#d8d5f0]'}`}
           >
             {isPending ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
               <>
                 <Text
-                  className="font-sans-semibold"
-                  style={{ fontSize: 14, color: ready ? '#ffffff' : C.muted }}
+                  className={`font-sans-semibold text-[14px] ${ready ? 'text-[#ffffff]' : 'text-[#9d9ac0]'}`}
                 >
                   Submit
                 </Text>
@@ -933,7 +701,25 @@ export default function RaiseTicketForm({ role, listPath }) {
             )}
           </TouchableOpacity>
         </View>
+        </StickyFooter>
       )}
-    </KeyboardAvoidingView>
+    </Screen>
   );
 }
+
+const sx = StyleSheet.create({
+  shadowSm: {
+    shadowColor: '#151233',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  shadowLg: {
+    shadowColor: '#151233',
+    shadowOpacity: 0.14,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+});

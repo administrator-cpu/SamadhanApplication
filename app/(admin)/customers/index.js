@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import Screen, { ScreenFlatList, TopInset } from '../../../src/components/layout/Screen';
 import { Stack, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useCustomers } from '../../../src/hooks/useCustomers';
@@ -25,9 +26,9 @@ export default function CustomerManagement() {
   const pagination = data?.pagination;
 
   return (
-    <View style={styles.container}>
+    <Screen edges={[]} className="bg-[#f8fafc]">
       <Stack.Screen options={{ headerShown: false }} />
-      <View className='bg-white p-5'></View>
+      <TopInset extra={4} className="bg-white">
       <View style={styles.header}>
         <View style={styles.searchBox}>
           <Feather name="search" size={16} color="#9ca3af" />
@@ -43,27 +44,28 @@ export default function CustomerManagement() {
           <Feather name="plus" size={18} color="#ffffff" />
         </Pressable>
       </View>
+      </TopInset>
 
       {isLoading ? (
-        <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#3b82f6" className="mt-[40px]" />
       ) : (
-        <FlatList
+        <ScreenFlatList
           data={customers}
           keyExtractor={(item, index) => String(item?.customer_row_id ?? item?.customer_id ?? index)}
-          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+          contentContainerClassName="p-[12px] std:p-[16px]"
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
               onPress={() => router.push(`/(admin)/customers/${item.customer_row_id}`)}
             >
-              <View style={{ flex: 1 }}>
+              <View className="flex-1">
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.email}>{item.email}</Text>
               </View>
-              <View style={{ gap: 5 }}>
+              <View className="gap-[5px]">
                 {item.outstanding !== null && item.outstanding !== undefined && 
 user?.email !== "abhishek@fab5network.com" && (
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: item.outstanding > 0 ? '#dc2626' : '#16a34a', marginRight: 8 }}>
+                  <Text className={`text-[12px] font-bold mr-[8px] ${item.outstanding > 0 ? 'text-[#dc2626]' : 'text-[#16a34a]'}`}>
                     ₹{item.outstanding}
                   </Text>
                 )}
@@ -99,12 +101,11 @@ user?.email !== "abhishek@fab5network.com" && (
           }
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
   header: { flexDirection: 'row', gap: 10, padding: 16, backgroundColor: '#ffffff' },
   searchBox: {
     flex: 1,

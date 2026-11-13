@@ -4,7 +4,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Stack } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import Screen, { ScreenFlatList, TopInset } from '../../../src/components/layout/Screen';
+import Sheet from '../../../src/components/layout/Sheet';
 import { ticketService } from '../../../src/api/ticketService';
 import { useEarliestYear, useResolvedTickets } from '../../../src/hooks/useTickets';
 import { ticketsToCsv } from '../../../src/utils/csv';
@@ -30,9 +32,10 @@ export default function ResolutionLog() {
 
 
     return (
-        <View style={styles.container}>
+        <Screen edges={[]} className="bg-[#f8fafc]">
             <Stack.Screen options={{ headerShown: false }} />
 
+            <TopInset className="bg-white">
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Resolution Log</Text>
                 <Pressable style={styles.exportButton} onPress={() => setExportModalOpen(true)}>
@@ -40,20 +43,21 @@ export default function ResolutionLog() {
                     <Text style={styles.exportButtonText}>Export</Text>
                 </Pressable>
             </View>
+            </TopInset>
 
             {isLoading ? (
-                <ActivityIndicator size="large" color="#3b82f6" style={{ marginTop: 40 }} />
+                <ActivityIndicator size="large" color="#3b82f6" className="mt-[40px]" />
             ) : (
-                <FlatList
+                <ScreenFlatList
                     data={tickets}
                     keyExtractor={(item, index) => String(item?.ticket_row_id ?? item?.id ?? index)}
-                    contentContainerStyle={{ padding: 16 }}
+                    contentContainerClassName="p-[12px] std:p-[16px]"
                     renderItem={({ item }) => (
                         <View style={styles.card}>
                             <View style={styles.cardTopRow}>
                                 <Text style={styles.ticketNo}>{item.ticket_no}</Text>
-                                <View style={[styles.statusBadge, { backgroundColor: item.status === 'CLOSED' ? '#f3f4f6' : '#f0fdf4' }]}>
-                                    <Text style={[styles.statusBadgeText, { color: item.status === 'CLOSED' ? '#6b7280' : '#16a34a' }]}>
+                                <View className={item.status === 'CLOSED' ? 'bg-[#f3f4f6]' : 'bg-[#f0fdf4]'} style={styles.statusBadge}>
+                                    <Text maxFontSizeMultiplier={1.2} className={item.status === 'CLOSED' ? 'text-[#6b7280]' : 'text-[#16a34a]'} style={styles.statusBadgeText}>
                                         {statusLabel(item.status)}
                                     </Text>
                                 </View>
@@ -99,7 +103,7 @@ export default function ResolutionLog() {
                 onClose={() => setExportModalOpen(false)}
                 earliestYear={earliestYearData?.year}
             />
-        </View>
+        </Screen>
     );
 }
 
@@ -152,9 +156,13 @@ function ExportModal({ visible, onClose, earliestYear }) {
 
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <View style={styles.modalBackdrop}>
-                <View style={styles.modalCard}>
+        <Sheet
+            visible={visible}
+            onClose={onClose}
+            keyboard={false}
+            backdropClassName="bg-[rgba(15,23,42,0.5)]"
+            className="bg-white rounded-tl-[20px] rounded-tr-[20px] p-[20px]"
+        >
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>Export Resolution Log</Text>
                         <Pressable onPress={onClose}>
@@ -200,20 +208,16 @@ function ExportModal({ visible, onClose, earliestYear }) {
                             </>
                         )}
                     </Pressable>
-                </View>
-            </View>
-        </Modal>
+        </Sheet>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8fafc' },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
-        paddingTop: 50,
         backgroundColor: '#ffffff',
     },
     headerTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
@@ -251,8 +255,6 @@ const styles = StyleSheet.create({
     pageButtonDisabled: { opacity: 0.5 },
     pageLabel: { fontSize: 13, color: '#475569' },
 
-    modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
-    modalCard: { backgroundColor: '#ffffff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     modalTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
     modalLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 8, marginTop: 12 },

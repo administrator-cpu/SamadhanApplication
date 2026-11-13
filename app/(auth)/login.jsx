@@ -5,12 +5,12 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import Screen from '../../src/components/layout/Screen';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { authService } from '../../src/api/authService';
@@ -106,32 +106,17 @@ export default function LoginScreen() {
   const handleBlur = useCallback(() => setFocusedField(null), []);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      style={{ flex: 1, backgroundColor: colors.bgBase }}
-    >
-      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+    <Screen edges={['top', 'bottom']} className="bg-[#F7F4EF]">
+    <KeyboardAvoidingView behavior="padding" className="flex-1">
+      <View className="flex-1 justify-center px-[24px]">
         <Text
           accessibilityRole="header"
-          style={{
-            fontFamily: fonts.heading,
-            fontSize: 30,
-            lineHeight: 38,
-            fontWeight: '500',
-            color: colors.textPrimary,
-            marginBottom: 8,
-          }}
+          className="font-[Fraunces_500Medium] text-[30px] leading-[38px] font-medium text-[#2E2A24] mb-[8px]"
         >
           Welcome back
         </Text>
         <Text
-          style={{
-            fontFamily: fonts.body,
-            fontSize: 16,
-            lineHeight: 24,
-            color: colors.textSecondary,
-            marginBottom: 40,
-          }}
+          className="font-[Karla_400Regular] text-[16px] leading-[24px] text-[#6B6255] mb-[40px]"
         >
           Sign in to your Samadhan account
         </Text>
@@ -139,25 +124,11 @@ export default function LoginScreen() {
         {errorMessage ? (
           <View
             accessibilityLiveRegion="polite"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: colors.errorBg,
-              borderRadius: 10,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              marginBottom: 20,
-            }}
+            className="flex-row items-center bg-[#F5E7E3] rounded-[10px] px-[12px] std:px-[16px] py-[12px] mb-[20px]"
           >
             <Feather name="alert-circle" size={18} color={colors.errorText} />
             <Text
-              style={{
-                fontFamily: fonts.bodySemibold,
-                color: colors.errorText,
-                fontSize: 14,
-                marginLeft: 8,
-                flex: 1,
-              }}
+              className="font-[Karla_600SemiBold] text-[#9C4A3C] text-[14px] ml-[8px] flex-1"
             >
               {errorMessage}
             </Text>
@@ -166,22 +137,13 @@ export default function LoginScreen() {
 
         {/* Email Input */}
         <Text
-          style={{
-            fontFamily: fonts.bodySemibold,
-            fontSize: 14,
-            color: colors.textPrimary,
-            marginBottom: 6,
-            marginLeft: 4,
-          }}
+          className="font-[Karla_600SemiBold] text-[14px] text-[#2E2A24] mb-[6px] ml-[4px]"
         >
           Email
         </Text>
         <View
-          style={[
-            styles.fieldWrapper,
-            focusedField === 'email' && styles.fieldWrapperFocused,
-            { marginBottom: 18 },
-          ]}
+          className="mb-[18px]"
+          style={[styles.fieldWrapper, focusedField === 'email' && styles.fieldWrapperFocused]}
         >
           <TextInput
             value={email}
@@ -196,34 +158,19 @@ export default function LoginScreen() {
             textContentType="emailAddress"
             editable={!isSubmitting}
             accessibilityLabel="Email address input"
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 15,
-              fontFamily: fonts.body,
-              fontSize: 16,
-              color: colors.textPrimary,
-            }}
+            className="px-[12px] std:px-[16px] py-[15px] font-[Karla_400Regular] text-[16px] text-[#2E2A24]"
           />
         </View>
 
         {/* Password Input with Toggle */}
         <Text
-          style={{
-            fontFamily: fonts.bodySemibold,
-            fontSize: 14,
-            color: colors.textPrimary,
-            marginBottom: 6,
-            marginLeft: 4,
-          }}
+          className="font-[Karla_600SemiBold] text-[14px] text-[#2E2A24] mb-[6px] ml-[4px]"
         >
           Password
         </Text>
         <View
-          style={[
-            styles.fieldWrapper,
-            focusedField === 'password' && styles.fieldWrapperFocused,
-            { marginBottom: 28, flexDirection: 'row', alignItems: 'center' },
-          ]}
+          className="mb-[28px] flex-row items-center"
+          style={[styles.fieldWrapper, focusedField === 'password' && styles.fieldWrapperFocused]}
         >
           <TextInput
             value={password}
@@ -239,21 +186,14 @@ export default function LoginScreen() {
             returnKeyType="go"
             blurOnSubmit={false}
             accessibilityLabel="Password input"
-            style={{
-              flex: 1,
-              paddingHorizontal: 16,
-              paddingVertical: 15,
-              fontFamily: fonts.body,
-              fontSize: 16,
-              color: colors.textPrimary,
-            }}
+            className="flex-1 px-[12px] std:px-[16px] py-[15px] font-[Karla_400Regular] text-[16px] text-[#2E2A24]"
           />
           <Pressable
             onPress={() => setShowPassword(!showPassword)}
             accessibilityRole="button"
             accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
             hitSlop={8}
-            style={{ padding: 12, marginRight: 4 }}
+            className="p-[12px] mr-[4px]"
           >
             <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
           </Pressable>
@@ -265,52 +205,38 @@ export default function LoginScreen() {
           disabled={isSubmitting}
           accessibilityRole="button"
           accessibilityLabel="Sign in button"
-          style={{
-            borderRadius: 10,
-            paddingVertical: 16,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: isSubmitting ? colors.primary600 : colors.primary500,
-            opacity: isSubmitting ? 0.85 : 1,
-            shadowColor: '#2E2A24',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 3,
-            marginTop: 8,
-          }}
+          className={`rounded-[10px] py-[16px] items-center justify-center mt-[8px] ${isSubmitting ? 'bg-[#9C5A2C] opacity-[0.85]' : 'bg-[#C0703A] opacity-100'}`} style={sx.shadow1}
         >
           {isSubmitting ? (
             <ActivityIndicator color={colors.textOnBrand} />
           ) : (
             <Text
-              style={{
-                fontFamily: fonts.bodySemibold,
-                color: colors.textOnBrand,
-                fontSize: 16,
-                letterSpacing: 0.3,
-              }}
+              className="font-[Karla_600SemiBold] text-[#FBF9F5] text-[16px] tracking-[0.3px]"
             >
               Sign In
             </Text>
           )}
         </TouchableOpacity>
 
-        <View style={{ marginTop: 24, alignItems: 'center' }}>
+        <View className="mt-[24px] items-center">
           <Pressable
             disabled={isSubmitting}
             onPress={() => router.push('/(auth)/forgot-password')}
             accessibilityRole="button"
             accessibilityLabel="Navigate to forgot password screen"
             hitSlop={8}
-            style={{ padding: 8 }}
+            className="p-[8px]"
           >
-            <Text style={{ fontFamily: fonts.bodySemibold, color: colors.primary500, fontSize: 14 }}>
+            <Text className="font-[Karla_600SemiBold] text-[#C0703A] text-[14px]">
               Forgot your password?
             </Text>
           </Pressable>
         </View>
       </View>
     </KeyboardAvoidingView>
+    </Screen>
   );
 }
+const sx = StyleSheet.create({
+  shadow1: { shadowColor: '#2E2A24', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
+});

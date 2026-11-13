@@ -9,10 +9,10 @@ export default function ImagePickerGrid({
   max,
   onAdd,
   onRemove,
-  size = 80,
+  sizeClass = 'w-[80px] h-[80px]',
 }) {
   return (
-    <View style={{ gap: 8 }}>
+    <View className="gap-[8px]">
       {label ? (
         <Text className="font-sans-semibold text-text-primary text-sm ml-1">
           {label}{' '}
@@ -22,13 +22,12 @@ export default function ImagePickerGrid({
         </Text>
       ) : null}
 
-      <View className="flex-row flex-wrap" style={{ gap: 12 }}>
+      <View className="flex-row flex-wrap gap-[12px]">
         {images.map((img) => (
           <View key={img.uri} className="relative">
             <Image
               source={{ uri: img.uri }}
-              style={{ width: size, height: size }}
-              className="rounded-2xl bg-bg-subtle border border-border"
+              className={`rounded-2xl bg-bg-subtle border border-border ${sizeClass}`}
               contentFit="cover"
               cachePolicy="memory-disk"
             />
@@ -46,8 +45,7 @@ export default function ImagePickerGrid({
         {images.length < max && (
           <Pressable
             onPress={onAdd}
-            style={{ width: size, height: size }}
-            className="rounded-2xl border-2 border-dashed border-border-strong bg-bg-subtle items-center justify-center"
+            className={`${sizeClass} rounded-2xl border-2 border-dashed border-border-strong bg-bg-subtle items-center justify-center`}
           >
             <Feather name="image" size={22} color="#948A7C" />
             <Text className="font-sans-semibold text-[10px] text-text-tertiary mt-1.5 uppercase tracking-wide">

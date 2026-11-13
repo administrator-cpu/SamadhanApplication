@@ -1,7 +1,8 @@
 // src/components/CustomerSettingsSheet.js
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Modal, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import Sheet from './layout/Sheet';
 import { C } from './TicketCard';
 import { useAuthStore } from '../store/authStore';
 import { userService } from '../api/userService';
@@ -66,41 +67,32 @@ export default function CustomerSettingsSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity
-        style={{ flex: 1, backgroundColor: 'rgba(21,18,51,0.45)', justifyContent: 'flex-end' }}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={{
-            backgroundColor: C.bg,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingTop: 10,
-            paddingBottom: 32,
-            maxHeight: '85%',
-          }}
-        >
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      animationType="fade"
+      keyboard={false}
+      backdropClassName="bg-[rgba(21,18,51,0.45)]"
+      className="rounded-tl-[28px] rounded-tr-[28px] pt-[10px] bg-[#F3F2FD]"
+    >
           <View
-            style={{ width: 40, height: 4, borderRadius: 999, backgroundColor: C.track, alignSelf: 'center', marginBottom: 16 }}
+            className="w-[40px] h-[4px] rounded-[999px] self-center mb-[16px] bg-[#EBE8FF]"
           />
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-[20px]">
 
           {/* Account summary */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 18 }}>
-            <View className="flex-row items-center" style={{ gap: 12 }}>
+          <View className="px-[16px] std:px-[20px] mb-[18px]">
+            <View className="flex-row items-center gap-[12px]">
               <View
-                className="items-center justify-center"
-                style={{ width: 48, height: 48, borderRadius: 999, backgroundColor: C.mint }}
+                className="items-center justify-center w-[48px] h-[48px] rounded-[999px] bg-[#CCF7E4]"
               >
                 <Feather name="user" size={20} color={C.mintInk2} />
               </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text className="font-sans-semibold" style={{ fontSize: 17, color: C.ink }} numberOfLines={1}>
+              <View className="flex-1 min-w-0">
+                <Text className="font-sans-semibold text-[17px] text-[#151233]" numberOfLines={1}>
                   {user?.name || 'Customer'}
                 </Text>
-                <Text className="font-sans" style={{ fontSize: 12, color: C.inkMuted, marginTop: 1 }} numberOfLines={1}>
+                <Text className="font-sans text-[12px] mt-[1px] text-[#6D6A96]" numberOfLines={1}>
                   {user?.email || user?.phone || ''}
                 </Text>
               </View>
@@ -109,30 +101,16 @@ export default function CustomerSettingsSheet({
             {/* Outstanding balance — only renders if a real number was passed in */}
             {outstandingAmount !== undefined && outstandingAmount !== null && (
               <View
-                className="flex-row items-center justify-between"
-                style={{
-                  marginTop: 16,
-                  backgroundColor: outstandingAmount > 0 ? C.marigold : C.mint,
-                  borderRadius: 18,
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                }}
+                className={`flex-row items-center justify-between mt-[16px] rounded-[18px] px-[12px] std:px-[16px] py-[14px] ${outstandingAmount > 0 ? 'bg-[#FFD166]' : 'bg-[#CCF7E4]'}`}
               >
                 <View>
                   <Text
-                    className="font-sans-semibold"
-                    style={{
-                      fontSize: 10,
-                      letterSpacing: 1,
-                      textTransform: 'uppercase',
-                      color: outstandingAmount > 0 ? C.marigoldInk2 : C.mintInk2,
-                    }}
+                    className={`font-sans-semibold text-[10px] tracking-[1px] uppercase ${outstandingAmount > 0 ? 'text-[#7A5200]' : 'text-[#0F7A56]'}`}
                   >
                     {outstandingLabel}
                   </Text>
                   <Text
-                    className="font-sans-semibold"
-                    style={{ fontSize: 22, marginTop: 3, color: outstandingAmount > 0 ? C.marigoldInk : C.mintInk }}
+                    className={`font-sans-semibold text-[22px] mt-[3px] ${outstandingAmount > 0 ? 'text-[#6B4800]' : 'text-[#0D6B4B]'}`}
                   >
                     ₹{Number(outstandingAmount).toLocaleString('en-IN')}
                   </Text>
@@ -145,29 +123,20 @@ export default function CustomerSettingsSheet({
           </View>
 
           {/* Navigation list */}
-          <View style={{ paddingHorizontal: 20, gap: 4 }}>
+          <View className="px-[16px] std:px-[20px] gap-[4px]">
             {NAV_ITEMS.map((item) => (
               <TouchableOpacity
                 key={item.key}
                 onPress={() => goTo(item.path)}
                 activeOpacity={0.8}
-                className="flex-row items-center"
-                style={{
-                  backgroundColor: C.card,
-                  borderRadius: 16,
-                  paddingVertical: 13,
-                  paddingHorizontal: 14,
-                  gap: 12,
-                  marginBottom: 6,
-                }}
+                className="flex-row items-center rounded-[16px] py-[13px] px-[14px] gap-[12px] mb-[6px] bg-[#FFFFFF]"
               >
                 <View
-                  className="items-center justify-center"
-                  style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: C.violetTint }}
+                  className="items-center justify-center w-[34px] h-[34px] rounded-[999px] bg-[#EBE8FF]"
                 >
                   <NavIcon item={item} color={C.violetInk} size={16} />
                 </View>
-                <Text className="font-sans-medium" style={{ flex: 1, fontSize: 14, color: C.ink }}>
+                <Text className="font-sans-medium flex-1 text-[14px] text-[#151233]">
                   {item.label}
                 </Text>
                 <Feather name="chevron-right" size={16} color={C.inkFaint} />
@@ -176,21 +145,19 @@ export default function CustomerSettingsSheet({
           </View>
 
           {/* Logout */}
-          <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
+          <View className="px-[16px] std:px-[20px] mt-[10px]">
             <TouchableOpacity
               onPress={handleLogout}
               activeOpacity={0.85}
-              className="flex-row items-center justify-center"
-              style={{ backgroundColor: C.coral, borderRadius: 16, height: 48, gap: 8 }}
+              className="flex-row items-center justify-center rounded-[16px] h-[48px] gap-[8px] bg-[#C2410C]"
             >
               <Feather name="log-out" size={16} color="#FFFFFF" />
-              <Text className="font-sans-semibold" style={{ fontSize: 14, color: '#FFFFFF' }}>
+              <Text className="font-sans-semibold text-[14px] text-[#FFFFFF]">
                 Log Out
               </Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
+          </ScrollView>
+    </Sheet>
   );
 }

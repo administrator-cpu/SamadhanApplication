@@ -16,7 +16,7 @@ export default function FormField({
   const [focused, setFocused] = useState(false);
 
   return (
-    <View style={{ gap: 8 }}>
+    <View className="gap-[8px]">
       {label ? (
         <Text className="font-sans-semibold text-text-primary text-sm ml-1">
           {label} {required && <Text className="text-primary-500">*</Text>}

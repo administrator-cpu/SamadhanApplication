@@ -28,7 +28,7 @@ export default function TicketOutageForm({ ticket, onDone }) {
   };
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 34 }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-[34px]">
       <View style={styles.intro}>
         <View style={styles.introChip}>
           <Feather name="wifi-off" size={16} color={T.amber} />
@@ -38,7 +38,7 @@ export default function TicketOutageForm({ ticket, onDone }) {
         </Text>
       </View>
 
-      <Text style={[FORM.label, { marginTop: 20 }]}>Where the fault sits</Text>
+      <Text className="mt-[20px]" style={FORM.label}>Where the fault sits</Text>
       <TextInput
         value={problemSide}
         onChangeText={setProblemSide}
@@ -61,7 +61,7 @@ export default function TicketOutageForm({ ticket, onDone }) {
         })}
       </View>
 
-      <Text style={[FORM.label, { marginTop: 20 }]}>Their ticket number</Text>
+      <Text className="mt-[20px]" style={FORM.label}>Their ticket number</Text>
       <TextInput
         value={telcoSrNumber}
         onChangeText={setTelcoSrNumber}
@@ -72,7 +72,7 @@ export default function TicketOutageForm({ ticket, onDone }) {
       />
       <Text style={styles.hint}>Leave blank if the provider hasn't given one yet.</Text>
 
-      <Pressable onPress={handleSave} disabled={isPending} style={[FORM.primary, { marginTop: 24 }, isPending && FORM.disabled]}>
+      <Pressable onPress={handleSave} disabled={isPending} className="mt-[24px]" style={[FORM.primary, isPending && FORM.disabled]}>
         {isPending ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
