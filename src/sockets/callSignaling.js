@@ -78,6 +78,17 @@ async function request(event, payload) {
   return res;
 }
 
+export async function checkCallActive(callId) {
+  const socket = getSocket();
+  if (!socket?.connected || !callId) return null;
+  try {
+    const res = await socket.timeout(4000).emitWithAck('call:check', { callId });
+    return res?.ok ? !!res.active : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchRingbackTune() {
   const res = await request(CALL_EVENTS.TUNE_GET, {});
   return res.tune ?? null;
@@ -103,6 +114,7 @@ export function bindCallListeners(handlers, socket = getSocket()) {
     [CALL_EVENTS.BUSY]: handlers.onBusy,
     [CALL_EVENTS.RINGING]: handlers.onRinging,
     [CALL_EVENTS.UNAVAILABLE]: handlers.onUnavailable,
+    connect: handlers.onReconnect,
   };
 
   Object.entries(map).forEach(([event, fn]) => {

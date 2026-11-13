@@ -24,6 +24,7 @@ import {
   emitEnd,
   emitInvite,
   emitBusy,
+  checkCallActive,
   bindCallListeners,
 } from '@/sockets/callSignaling';
 import { connectSocket } from '@/sockets/socketManager';
@@ -39,6 +40,7 @@ export const END_REASON = {
   PERMISSION: 'permission',
   OFFLINE: 'offline',
   UNAVAILABLE: 'unavailable',
+  CALLER_LEFT: 'caller_left',
 };
 
 export function useCall() {
@@ -269,9 +271,22 @@ export function useCall() {
     [user, ensureMicPermission, getLocalAudioStream, createPeerConnection, cleanup, setStatusSafe, armTimeout, cancelOutgoing]
   );
 
+  const verifyIncoming = useCallback(async () => {
+    const callId = ringingCallIdRef.current;
+    if (!callId || statusRef.current !== CALL_STATUS.RINGING_INCOMING) return true;
+    const active = await checkCallActive(callId);
+    if (active === false && ringingCallIdRef.current === callId) {
+      cleanup(END_REASON.CALLER_LEFT);
+      return false;
+    }
+    return true;
+  }, [cleanup]);
+
   const acceptCall = useCallback(async () => {
     if (!incomingCall?.offerSdp) return;
     const { fromEmail, callId, offerSdp, callerName, ticketNumber } = incomingCall;
+    if (!(await verifyIncoming())) return;
+    if (ringingCallIdRef.current !== callId) return;
     callIdRef.current = callId;
     ringingCallIdRef.current = null;
     peerEmailRef.current = fromEmail;
@@ -300,7 +315,7 @@ export function useCall() {
       cleanup(err?.reason ?? END_REASON.NETWORK);
       throw err;
     }
-  }, [incomingCall, getLocalAudioStream, createPeerConnection, flushCandidates, cleanup, setStatusSafe, armConnectTimeout]);
+  }, [incomingCall, verifyIncoming, getLocalAudioStream, createPeerConnection, flushCandidates, cleanup, setStatusSafe, armConnectTimeout]);
 
   const rejectCall = useCallback(() => {
     if (!incomingCall) return;
@@ -321,7 +336,7 @@ export function useCall() {
     (socket) =>
       bindCallListeners(
         {
-          onInvite: ({ fromEmail, callId, ticketId, ticketNumber, callerName }) => {
+          onInvite: ({ fromEmail, callId, ticketId, ticketNumber, callerName, declineToken }) => {
             if (statusRef.current !== CALL_STATUS.IDLE) {
               if (callId !== callIdRef.current && callId !== ringingCallIdRef.current) {
                 emitBusy({ toEmail: fromEmail, callId });
@@ -336,6 +351,7 @@ export function useCall() {
               ticketId,
               ticketNumber,
               callerName,
+              declineToken,
             }));
             setStatusSafe(CALL_STATUS.RINGING_INCOMING);
             armTimeout(RING_TIMEOUT_MS + 5000, () => {
@@ -389,6 +405,9 @@ export function useCall() {
               : statusRef.current === CALL_STATUS.RINGING_INCOMING;
             if (matches) cleanup(END_REASON.NO_ANSWER);
           },
+          onReconnect: () => {
+            verifyIncoming();
+          },
           onRinging: ({ callId, tune } = {}) => {
             if (callId !== callIdRef.current) return;
             if (statusRef.current !== CALL_STATUS.RINGING_OUTGOING) return;
@@ -408,7 +427,7 @@ export function useCall() {
         },
         socket
       ),
-    [cleanup, hangUp, setStatusSafe, armTimeout, armConnectTimeout, flushCandidates]
+    [cleanup, hangUp, setStatusSafe, armTimeout, armConnectTimeout, flushCandidates, verifyIncoming]
   );
 
   return {
@@ -424,6 +443,7 @@ export function useCall() {
     startCall,
     acceptCall,
     rejectCall,
+    verifyIncoming,
     endCall,
     cancelOutgoing,
     toggleMute,

@@ -26,6 +26,8 @@ const stub = {
   setNotificationCategoryAsync: async () => null,
   getPresentedNotificationsAsync: async () => [],
   dismissNotificationAsync: async () => {},
+  deleteNotificationChannelAsync: async () => {},
+  registerTaskAsync: async () => {},
   AndroidImportance: { HIGH: 4, MAX: 5 },
   AndroidNotificationVisibility: { PUBLIC: 1 },
   AndroidAudioUsage: { NOTIFICATION_RINGTONE: 6 },
