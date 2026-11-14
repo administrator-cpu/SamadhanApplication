@@ -6,16 +6,19 @@ export default ({ config }) => {
     development: {
       name: "Samadhan (Dev)",
       apiUrl: "https://samadhan-api.fab5connect.com/api",
+      notifUrl: "https://samadhan-notify.fab5connect.com",
       androidPackage: "com.harshjha047.samadhan",
     },
     staging: {
       name: "Samadhan (Staging)",
       apiUrl: "https://samadhan-api.fab5connect.com/api",
+      notifUrl: "https://samadhan-notify.fab5connect.com",
       androidPackage: "com.harshjha047.samadhan",
     },
     production: {
       name: "Samadhan",
       apiUrl: "https://samadhan-api.fab5connect.com/api",
+      notifUrl: "https://samadhan-notify.fab5connect.com",
       androidPackage: "com.harshjha047.samadhan",
     },
   }[env];
@@ -111,6 +114,7 @@ export default ({ config }) => {
     scheme: 'samadhan',
     extra: {
       apiUrl: envConfig.apiUrl,
+      notifUrl: process.env.NOTIFICATION_SERVICE_URL || envConfig.notifUrl,
       eas: { projectId: "20dbfe9a-6b5a-45d2-baa3-e74d84f4a258" },
     },
   };

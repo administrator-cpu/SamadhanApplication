@@ -43,13 +43,16 @@ export const userService = {
         const { data } = await apiClient.get(`/users/outstanding-balance`);
         return data.data ?? "";
     },
-    registerPushToken: async (token, platform) => {
-        const { data } = await apiClient.post('/users/push-token', { token, platform });
+    registerPushToken: async (token, platform, deviceId) => {
+        const { data } = await apiClient.post('/users/push-token', { token, platform, deviceId });
         return data.data;
     },
 
-    removePushToken: async () => {
-        const { data } = await apiClient.delete('/users/push-token');
+    removePushToken: async (token, deviceId) => {
+        const { data } = await apiClient.delete('/users/push-token', {
+            params: { token, deviceId },
+            data: { token, deviceId },
+        });
         return data.data;
     },
 

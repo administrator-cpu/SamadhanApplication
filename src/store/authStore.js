@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { authService } from '../api/authService';
-import { userService } from '../api/userService';
+import { unregisterPushToken } from '../notifications/pushRegistration';
 import { storage } from '../utils/storage';
 import notificationsSafe from '@/utils/notificationsSafe';
 import { queryClient } from '../api/queryClient';
@@ -51,7 +51,7 @@ export const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     try {
-      await userService.removePushToken().catch(() => {});
+      await unregisterPushToken().catch(() => {});
       await authService.logout();
     } finally {
       await notificationsSafe.setBadgeCountAsync(0).catch(() => {});
