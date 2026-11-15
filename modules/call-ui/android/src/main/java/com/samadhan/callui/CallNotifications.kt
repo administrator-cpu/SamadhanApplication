@@ -64,7 +64,7 @@ object CallNotifications {
     return nm.canUseFullScreenIntent()
   }
 
-  private fun smallIcon(context: Context): Int {
+  fun smallIcon(context: Context): Int {
     val res = context.resources
     val custom = res.getIdentifier("notification_icon", "drawable", context.packageName)
     return if (custom != 0) custom else context.applicationInfo.icon
@@ -86,6 +86,7 @@ object CallNotifications {
 
   @SuppressLint("MissingPermission")
   fun show(context: Context, call: IncomingCall) {
+    if (CallPrefs.isBusyWith(call.callId)) return
     ensureChannel(context)
     val id = notificationId(call.callId)
 
@@ -97,7 +98,7 @@ object CallNotifications {
       Intent(context, CallActionReceiver::class.java).apply {
         action = BROADCAST_DECLINE
         putExtra(EXTRA_CALL_ID, call.callId)
-        putExtra(EXTRA_DECLINE_URL, call.declineUrl)
+        putExtra(EXTRA_DECLINE_URL, call.declineUrl ?: CallPrefs.declineUrl(context))
         putExtra(EXTRA_DECLINE_TOKEN, call.declineToken)
       },
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

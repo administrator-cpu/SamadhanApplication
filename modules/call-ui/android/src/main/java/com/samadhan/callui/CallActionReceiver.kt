@@ -9,6 +9,12 @@ import java.net.URL
 
 class CallActionReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action == OngoingCallService.BROADCAST_HANGUP) {
+      val callId = intent.getStringExtra(CallNotifications.EXTRA_CALL_ID) ?: return
+      CallUiModule.emitFromNative(CallUiModule.ACTION_END, callId)
+      if (!CallUiModule.hasListener()) OngoingCallService.stop(context)
+      return
+    }
     if (intent.action != CallNotifications.BROADCAST_DECLINE) return
     val callId = intent.getStringExtra(CallNotifications.EXTRA_CALL_ID) ?: return
     CallNotifications.dismiss(context, callId)
@@ -28,7 +34,9 @@ class CallActionReceiver : BroadcastReceiver() {
           doOutput = true
           setRequestProperty("Content-Type", "application/json")
         }
-        val body = JSONObject().put("callId", callId).put("token", token).toString()
+        val body = JSONObject().put("callId", callId).put("token", token)
+          .apply { CallPrefs.deviceId(context)?.let { put("deviceId", it) } }
+          .toString()
         conn.outputStream.use { it.write(body.toByteArray()) }
         conn.responseCode
         conn.disconnect()

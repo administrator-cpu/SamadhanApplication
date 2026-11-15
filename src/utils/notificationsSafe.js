@@ -18,6 +18,7 @@ const stub = {
   requestPermissionsAsync: async () => ({ status: 'undetermined' }),
   setNotificationChannelAsync: async () => {},
   getExpoPushTokenAsync: async () => ({ data: null }),
+  getDevicePushTokenAsync: async () => ({ data: null }),
   setBadgeCountAsync: async () => {},
   addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
   addNotificationReceivedListener: () => ({ remove: () => {} }),

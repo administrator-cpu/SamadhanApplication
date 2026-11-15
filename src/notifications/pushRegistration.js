@@ -1,5 +1,9 @@
 import { Platform } from 'react-native';
 import * as Application from 'expo-application';
+import * as Device from 'expo-device';
+import Notifications, { isPushAvailable } from '../utils/notificationsSafe';
+import { DECLINE_URL } from '../calls/backgroundCallTask';
+import { CallUi } from '../../modules/call-ui';
 import { storage } from '../utils/storage';
 import { userService } from '../api/userService';
 import { notificationService, isNotificationServiceConfigured } from '../api/notificationService';
@@ -48,4 +52,57 @@ export async function unregisterPushToken() {
 
   await Promise.allSettled(jobs);
   await storage.deleteItemAsync(TOKEN_KEY).catch(() => {});
+}
+
+const VOIP_WAIT_MS = 10000;
+
+function waitForVoipToken() {
+  const current = CallUi.getVoipToken();
+  if (current) return Promise.resolve(current);
+  return new Promise((resolve) => {
+    const sub = CallUi.addVoipTokenListener((token) => {
+      if (!token) return;
+      clearTimeout(timer);
+      sub.remove();
+      resolve(token);
+    });
+    const timer = setTimeout(() => {
+      sub.remove();
+      resolve(CallUi.getVoipToken());
+    }, VOIP_WAIT_MS);
+  });
+}
+
+async function getNativeCallToken() {
+  if (!CallUi.isAvailable) return null;
+  if (Platform.OS === 'ios') {
+    const token = await waitForVoipToken();
+    return token ? { kind: 'apns_voip', token } : null;
+  }
+  if (Platform.OS === 'android' && isPushAvailable && Device.isDevice) {
+    const res = await Notifications.getDevicePushTokenAsync();
+    return res?.data ? { kind: 'fcm', token: String(res.data) } : null;
+  }
+  return null;
+}
+
+/**
+ * Registers the token that rings the phone natively for calls: PushKit VoIP (iOS) or the raw FCM token (Android).
+ * Independent of notification permission: VoIP pushes and FCM data messages are delivered without it.
+ */
+export async function registerCallToken(known = null) {
+  const deviceId = await getDeviceId();
+  CallUi.setConfig({ deviceId, declineUrl: DECLINE_URL });
+  if (!isNotificationServiceConfigured) return;
+
+  const native = known ?? (await getNativeCallToken());
+  if (!native?.token) return;
+
+  await notificationService.register({
+    token: native.token,
+    kind: native.kind,
+    platform: Platform.OS,
+    deviceId,
+    appVersion: Application.nativeApplicationVersion ?? '',
+  });
 }

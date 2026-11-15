@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
 import expo.modules.kotlin.modules.Module
@@ -13,11 +14,16 @@ import java.lang.ref.WeakReference
 
 class CallUiModule : Module() {
   companion object {
+    const val ACTION_END = "end"
     private var instance: WeakReference<CallUiModule>? = null
+    @Volatile
+    private var observing = false
 
     fun emitFromNative(action: String, callId: String) {
       instance?.get()?.emitAction(action, callId)
     }
+
+    fun hasListener(): Boolean = instance?.get() != null && observing
   }
 
   private val context: Context
@@ -70,6 +76,14 @@ class CallUiModule : Module() {
       if (instance?.get() === this@CallUiModule) instance = null
     }
 
+    OnStartObserving {
+      observing = true
+    }
+
+    OnStopObserving {
+      observing = false
+    }
+
     OnActivityEntersForeground {
       val activity = appContext.currentActivity
       if (activity?.intent?.hasExtra(CallNotifications.EXTRA_CALL_ID) == true) setLockScreen(activity, true)
@@ -81,6 +95,57 @@ class CallUiModule : Module() {
 
     Function("consumeLaunchAction") {
       handleCallIntent(appContext.currentActivity?.intent)
+    }
+
+    Function("consumePendingActions") {
+      listOfNotNull(handleCallIntent(appContext.currentActivity?.intent))
+    }
+
+    Function("setConfig") { deviceId: String?, declineUrl: String? ->
+      CallPrefs.save(context, deviceId, declineUrl)
+    }
+
+    Function("setActiveCall") { callId: String? ->
+      CallPrefs.activeCallId = callId?.takeIf { it.isNotBlank() }
+    }
+
+    Function("endCall") { callId: String ->
+      CallNotifications.dismiss(context, callId)
+      OngoingCallService.stop(context)
+    }
+
+    Function("setMuted") { _: String, _: Boolean ->
+      // Android has no system call UI to sync (self-managed calls stay in the app).
+    }
+
+    Function("startOngoingCall") { callId: String, callerName: String ->
+      OngoingCallService.start(context, callId, callerName)
+    }
+
+    Function("stopOngoingCall") {
+      OngoingCallService.stop(context)
+    }
+
+    Function("isIgnoringBatteryOptimizations") {
+      val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+      pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    }
+
+    Function("openBatteryOptimizationSettings") {
+      val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      try {
+        context.startActivity(request)
+      } catch (_: Exception) {
+        try {
+          context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {
+          context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          )
+        }
+      }
     }
 
     Function("showIncomingCall") { callId: String, callerName: String, subtitle: String?, declineUrl: String?, declineToken: String?, timeoutMs: Double ->

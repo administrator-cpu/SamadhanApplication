@@ -37,7 +37,17 @@ export default ({ config }) => {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
       },
-      permissions: ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
+      permissions: [
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "POST_NOTIFICATIONS",
+        "USE_FULL_SCREEN_INTENT",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_PHONE_CALL",
+        "FOREGROUND_SERVICE_MICROPHONE",
+        "MANAGE_OWN_CALLS",
+        "WAKE_LOCK",
+      ],
       blockedPermissions: [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
@@ -53,6 +63,10 @@ export default ({ config }) => {
       infoPlist: {
         NSCameraUsageDescription: 'Samadhan needs camera access so you can attach a photo of the issue to your ticket.',
         NSMicrophoneUsageDescription: 'Samadhan needs microphone access to make and receive calls.',
+        // VoIP: PushKit wakes the app for incoming calls (CallKit); audio keeps the call alive when locked.
+        UIBackgroundModes: ['voip', 'audio', 'remote-notification'],
+        // Lets the CallKit "Decline" work before JS has started (modules/call-ui/ios/CallManager.swift).
+        SamadhanCallDeclineUrl: `${envConfig.apiUrl}/calls/decline`,
       },
     },
     splash: {

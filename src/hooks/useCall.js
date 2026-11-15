@@ -53,6 +53,7 @@ export function useCall() {
   const [endReason, setEndReason] = useState(null);
   const [peer, setPeer] = useState(null);
   const [ringback, setRingback] = useState(null);
+  const [activeCallId, setActiveCallId] = useState(null);
 
   const pcRef = useRef(null);
   const callIdRef = useRef(null);
@@ -100,6 +101,7 @@ export function useCall() {
       setIncomingCall(null);
       setPeer(null);
       setRingback(null);
+      setActiveCallId(null);
       setEndReason(reason);
       setStatusSafe(CALL_STATUS.IDLE);
     },
@@ -223,6 +225,7 @@ export function useCall() {
 
       const callId = `${user.id}-${Date.now()}`;
       callIdRef.current = callId;
+      setActiveCallId(callId);
       peerEmailRef.current = toEmail;
       setPeer({ name: peerName || toEmail, ticketNumber: ticketNumber ?? null });
       setEndReason(null);
@@ -288,6 +291,7 @@ export function useCall() {
     if (!(await verifyIncoming())) return;
     if (ringingCallIdRef.current !== callId) return;
     callIdRef.current = callId;
+    setActiveCallId(callId);
     ringingCallIdRef.current = null;
     peerEmailRef.current = fromEmail;
     setPeer({ name: callerName || fromEmail, ticketNumber: ticketNumber ?? null });
@@ -331,6 +335,17 @@ export function useCall() {
     track.enabled = !track.enabled;
     setIsMuted(!track.enabled);
   }, [localStream]);
+
+  /** Idempotent: used to follow the system call UI (CallKit mute button). */
+  const setMuted = useCallback(
+    (muted) => {
+      const track = localStream?.getAudioTracks()[0];
+      if (!track) return;
+      track.enabled = !muted;
+      setIsMuted(!!muted);
+    },
+    [localStream]
+  );
 
   const attachSignalingListeners = useCallback(
     (socket) =>
@@ -438,6 +453,7 @@ export function useCall() {
     incomingCall,
     endReason,
     ringback,
+    activeCallId,
     peerName: peer?.name ?? null,
     ticketNumber: peer?.ticketNumber ?? null,
     startCall,
@@ -447,6 +463,7 @@ export function useCall() {
     endCall,
     cancelOutgoing,
     toggleMute,
+    setMuted,
     attachSignalingListeners,
   };
 }

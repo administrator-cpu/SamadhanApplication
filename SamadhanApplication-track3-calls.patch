@@ -1,0 +1,1688 @@
+From 47452d16a3ee5e5164ae4a419c3f82eff3f7ed8f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Nov 2026 21:56:56 +0000
+Subject: [PATCH] Calls: native ring when backgrounded/killed/locked
+ (PushKit+CallKit on iOS, FCM full-screen call on Android)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WWqfHEDBF7utBpMgdDDGdi
+---
+ app.config.js                                 |  16 +-
+ .../android/src/main/AndroidManifest.xml      |  11 +
+ .../com/samadhan/callui/CallActionReceiver.kt |  10 +-
+ .../com/samadhan/callui/CallNotifications.kt  |   5 +-
+ .../java/com/samadhan/callui/CallPrefs.kt     |  29 ++
+ .../java/com/samadhan/callui/CallUiModule.kt  |  65 +++
+ .../com/samadhan/callui/OngoingCallService.kt | 135 ++++++
+ modules/call-ui/expo-module.config.json       |   6 +-
+ modules/call-ui/index.js                      |  47 +-
+ modules/call-ui/ios/CallManager.swift         | 422 ++++++++++++++++++
+ modules/call-ui/ios/CallUi.podspec            |  22 +
+ .../ios/CallUiAppDelegateSubscriber.swift     |  13 +
+ modules/call-ui/ios/CallUiModule.swift        |  69 +++
+ src/calls/backgroundCallTask.js               |   7 +-
+ src/context/CallProvider.js                   | 144 +++++-
+ src/hooks/useCall.js                          |  17 +
+ src/hooks/usePushNotifications.js             |  36 +-
+ src/notifications/pushRegistration.js         |  57 +++
+ src/sockets/callSignaling.js                  |  15 +-
+ src/store/authStore.js                        |   6 +-
+ src/utils/notificationsSafe.js                |   1 +
+ src/utils/storage.js                          |  35 +-
+ 22 files changed, 1130 insertions(+), 38 deletions(-)
+ create mode 100644 modules/call-ui/android/src/main/java/com/samadhan/callui/CallPrefs.kt
+ create mode 100644 modules/call-ui/android/src/main/java/com/samadhan/callui/OngoingCallService.kt
+ create mode 100644 modules/call-ui/ios/CallManager.swift
+ create mode 100644 modules/call-ui/ios/CallUi.podspec
+ create mode 100644 modules/call-ui/ios/CallUiAppDelegateSubscriber.swift
+ create mode 100644 modules/call-ui/ios/CallUiModule.swift
+
+diff --git a/app.config.js b/app.config.js
+index 87850ed..5bf00fd 100644
+--- a/app.config.js
++++ b/app.config.js
+@@ -37,7 +37,17 @@ export default ({ config }) => {
+       adaptiveIcon: {
+         foregroundImage: "./assets/adaptive-icon.png",
+       },
+-      permissions: ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
++      permissions: [
++        "RECORD_AUDIO",
++        "MODIFY_AUDIO_SETTINGS",
++        "POST_NOTIFICATIONS",
++        "USE_FULL_SCREEN_INTENT",
++        "FOREGROUND_SERVICE",
++        "FOREGROUND_SERVICE_PHONE_CALL",
++        "FOREGROUND_SERVICE_MICROPHONE",
++        "MANAGE_OWN_CALLS",
++        "WAKE_LOCK",
++      ],
+       blockedPermissions: [
+         "android.permission.READ_MEDIA_IMAGES",
+         "android.permission.READ_MEDIA_VIDEO",
+@@ -53,6 +63,10 @@ export default ({ config }) => {
+       infoPlist: {
+         NSCameraUsageDescription: 'Samadhan needs camera access so you can attach a photo of the issue to your ticket.',
+         NSMicrophoneUsageDescription: 'Samadhan needs microphone access to make and receive calls.',
++        // VoIP: PushKit wakes the app for incoming calls (CallKit); audio keeps the call alive when locked.
++        UIBackgroundModes: ['voip', 'audio', 'remote-notification'],
++        // Lets the CallKit "Decline" work before JS has started (modules/call-ui/ios/CallManager.swift).
++        SamadhanCallDeclineUrl: `${envConfig.apiUrl}/calls/decline`,
+       },
+     },
+     splash: {
+diff --git a/modules/call-ui/android/src/main/AndroidManifest.xml b/modules/call-ui/android/src/main/AndroidManifest.xml
+index 3dfa837..ade1a02 100644
+--- a/modules/call-ui/android/src/main/AndroidManifest.xml
++++ b/modules/call-ui/android/src/main/AndroidManifest.xml
+@@ -2,10 +2,21 @@
+   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+   <uses-permission android:name="android.permission.VIBRATE" />
+   <uses-permission android:name="android.permission.INTERNET" />
++  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
++  <uses-permission android:name="android.permission.WAKE_LOCK" />
++  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
++  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
++  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
++  <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
++  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+ 
+   <application>
+     <receiver
+       android:name="com.samadhan.callui.CallActionReceiver"
+       android:exported="false" />
++    <service
++      android:name="com.samadhan.callui.OngoingCallService"
++      android:exported="false"
++      android:foregroundServiceType="phoneCall|microphone" />
+   </application>
+ </manifest>
+diff --git a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallActionReceiver.kt b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallActionReceiver.kt
+index 9b561ca..26a6a4c 100644
+--- a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallActionReceiver.kt
++++ b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallActionReceiver.kt
+@@ -9,6 +9,12 @@ import java.net.URL
+ 
+ class CallActionReceiver : BroadcastReceiver() {
+   override fun onReceive(context: Context, intent: Intent) {
++    if (intent.action == OngoingCallService.BROADCAST_HANGUP) {
++      val callId = intent.getStringExtra(CallNotifications.EXTRA_CALL_ID) ?: return
++      CallUiModule.emitFromNative(CallUiModule.ACTION_END, callId)
++      if (!CallUiModule.hasListener()) OngoingCallService.stop(context)
++      return
++    }
+     if (intent.action != CallNotifications.BROADCAST_DECLINE) return
+     val callId = intent.getStringExtra(CallNotifications.EXTRA_CALL_ID) ?: return
+     CallNotifications.dismiss(context, callId)
+@@ -28,7 +34,9 @@ class CallActionReceiver : BroadcastReceiver() {
+           doOutput = true
+           setRequestProperty("Content-Type", "application/json")
+         }
+-        val body = JSONObject().put("callId", callId).put("token", token).toString()
++        val body = JSONObject().put("callId", callId).put("token", token)
++          .apply { CallPrefs.deviceId(context)?.let { put("deviceId", it) } }
++          .toString()
+         conn.outputStream.use { it.write(body.toByteArray()) }
+         conn.responseCode
+         conn.disconnect()
+diff --git a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallNotifications.kt b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallNotifications.kt
+index fbc1414..601b816 100644
+--- a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallNotifications.kt
++++ b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallNotifications.kt
+@@ -64,7 +64,7 @@ object CallNotifications {
+     return nm.canUseFullScreenIntent()
+   }
+ 
+-  private fun smallIcon(context: Context): Int {
++  fun smallIcon(context: Context): Int {
+     val res = context.resources
+     val custom = res.getIdentifier("notification_icon", "drawable", context.packageName)
+     return if (custom != 0) custom else context.applicationInfo.icon
+@@ -86,6 +86,7 @@ object CallNotifications {
+ 
+   @SuppressLint("MissingPermission")
+   fun show(context: Context, call: IncomingCall) {
++    if (CallPrefs.isBusyWith(call.callId)) return
+     ensureChannel(context)
+     val id = notificationId(call.callId)
+ 
+@@ -97,7 +98,7 @@ object CallNotifications {
+       Intent(context, CallActionReceiver::class.java).apply {
+         action = BROADCAST_DECLINE
+         putExtra(EXTRA_CALL_ID, call.callId)
+-        putExtra(EXTRA_DECLINE_URL, call.declineUrl)
++        putExtra(EXTRA_DECLINE_URL, call.declineUrl ?: CallPrefs.declineUrl(context))
+         putExtra(EXTRA_DECLINE_TOKEN, call.declineToken)
+       },
+       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+diff --git a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallPrefs.kt b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallPrefs.kt
+new file mode 100644
+index 0000000..1a872a4
+--- /dev/null
++++ b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallPrefs.kt
+@@ -0,0 +1,29 @@
++package com.samadhan.callui
++
++import android.content.Context
++
++/** Values native code needs when JS is not running (killed app, lock-screen decline). */
++object CallPrefs {
++  private const val FILE = "samadhan_call_ui"
++  private const val KEY_DEVICE_ID = "device_id"
++  private const val KEY_DECLINE_URL = "decline_url"
++
++  @Volatile
++  var activeCallId: String? = null
++
++  private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
++
++  fun save(context: Context, deviceId: String?, declineUrl: String?) {
++    val editor = prefs(context).edit()
++    if (!deviceId.isNullOrBlank()) editor.putString(KEY_DEVICE_ID, deviceId)
++    if (!declineUrl.isNullOrBlank()) editor.putString(KEY_DECLINE_URL, declineUrl)
++    editor.apply()
++  }
++
++  fun deviceId(context: Context): String? = prefs(context).getString(KEY_DEVICE_ID, null)
++
++  fun declineUrl(context: Context): String? = prefs(context).getString(KEY_DECLINE_URL, null)
++
++  /** Busy with another call in the app: a new invite must not ring over it. */
++  fun isBusyWith(callId: String): Boolean = activeCallId.let { it != null && it != callId }
++}
+diff --git a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallUiModule.kt b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallUiModule.kt
+index f9bb7d4..e2d9e11 100644
+--- a/modules/call-ui/android/src/main/java/com/samadhan/callui/CallUiModule.kt
++++ b/modules/call-ui/android/src/main/java/com/samadhan/callui/CallUiModule.kt
+@@ -5,6 +5,7 @@ import android.content.Context
+ import android.content.Intent
+ import android.net.Uri
+ import android.os.Build
++import android.os.PowerManager
+ import android.provider.Settings
+ import android.view.WindowManager
+ import expo.modules.kotlin.modules.Module
+@@ -13,11 +14,16 @@ import java.lang.ref.WeakReference
+ 
+ class CallUiModule : Module() {
+   companion object {
++    const val ACTION_END = "end"
+     private var instance: WeakReference<CallUiModule>? = null
++    @Volatile
++    private var observing = false
+ 
+     fun emitFromNative(action: String, callId: String) {
+       instance?.get()?.emitAction(action, callId)
+     }
++
++    fun hasListener(): Boolean = instance?.get() != null && observing
+   }
+ 
+   private val context: Context
+@@ -70,6 +76,14 @@ class CallUiModule : Module() {
+       if (instance?.get() === this@CallUiModule) instance = null
+     }
+ 
++    OnStartObserving {
++      observing = true
++    }
++
++    OnStopObserving {
++      observing = false
++    }
++
+     OnActivityEntersForeground {
+       val activity = appContext.currentActivity
+       if (activity?.intent?.hasExtra(CallNotifications.EXTRA_CALL_ID) == true) setLockScreen(activity, true)
+@@ -83,6 +97,57 @@ class CallUiModule : Module() {
+       handleCallIntent(appContext.currentActivity?.intent)
+     }
+ 
++    Function("consumePendingActions") {
++      listOfNotNull(handleCallIntent(appContext.currentActivity?.intent))
++    }
++
++    Function("setConfig") { deviceId: String?, declineUrl: String? ->
++      CallPrefs.save(context, deviceId, declineUrl)
++    }
++
++    Function("setActiveCall") { callId: String? ->
++      CallPrefs.activeCallId = callId?.takeIf { it.isNotBlank() }
++    }
++
++    Function("endCall") { callId: String ->
++      CallNotifications.dismiss(context, callId)
++      OngoingCallService.stop(context)
++    }
++
++    Function("setMuted") { _: String, _: Boolean ->
++      // Android has no system call UI to sync (self-managed calls stay in the app).
++    }
++
++    Function("startOngoingCall") { callId: String, callerName: String ->
++      OngoingCallService.start(context, callId, callerName)
++    }
++
++    Function("stopOngoingCall") {
++      OngoingCallService.stop(context)
++    }
++
++    Function("isIgnoringBatteryOptimizations") {
++      val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
++      pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
++    }
++
++    Function("openBatteryOptimizationSettings") {
++      val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
++        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++      try {
++        context.startActivity(request)
++      } catch (_: Exception) {
++        try {
++          context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
++        } catch (_: Exception) {
++          context.startActivity(
++            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
++              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++          )
++        }
++      }
++    }
++
+     Function("showIncomingCall") { callId: String, callerName: String, subtitle: String?, declineUrl: String?, declineToken: String?, timeoutMs: Double ->
+       CallNotifications.show(
+         context,
+diff --git a/modules/call-ui/android/src/main/java/com/samadhan/callui/OngoingCallService.kt b/modules/call-ui/android/src/main/java/com/samadhan/callui/OngoingCallService.kt
+new file mode 100644
+index 0000000..1434869
+--- /dev/null
++++ b/modules/call-ui/android/src/main/java/com/samadhan/callui/OngoingCallService.kt
+@@ -0,0 +1,135 @@
++package com.samadhan.callui
++
++import android.annotation.SuppressLint
++import android.app.Notification
++import android.app.NotificationChannel
++import android.app.NotificationManager
++import android.app.PendingIntent
++import android.app.Service
++import android.content.Context
++import android.content.Intent
++import android.content.pm.ServiceInfo
++import android.os.Build
++import android.os.IBinder
++import androidx.core.app.NotificationCompat
++import androidx.core.app.Person
++import androidx.core.app.ServiceCompat
++import androidx.core.content.ContextCompat
++
++/**
++ * Foreground service for the duration of a connected call so Android keeps the mic and audio running
++ * when the app is backgrounded or the screen locks (Android 14+ requires a typed foreground service).
++ */
++class OngoingCallService : Service() {
++  companion object {
++    const val CHANNEL_ID = "samadhan_ongoing_calls"
++    private const val NOTIFICATION_ID = 0x5A11
++    private const val EXTRA_CALLER = "com.samadhan.callui.CALLER"
++    const val BROADCAST_HANGUP = "com.samadhan.callui.HANGUP"
++
++    fun start(context: Context, callId: String, callerName: String) {
++      val intent = Intent(context, OngoingCallService::class.java)
++        .putExtra(CallNotifications.EXTRA_CALL_ID, callId)
++        .putExtra(EXTRA_CALLER, callerName)
++      try {
++        ContextCompat.startForegroundService(context, intent)
++      } catch (_: Exception) {
++        // Background start not allowed (should not happen: calls connect with the app visible).
++      }
++    }
++
++    fun stop(context: Context) {
++      context.stopService(Intent(context, OngoingCallService::class.java))
++    }
++
++    private fun ensureChannel(context: Context) {
++      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
++      val nm = context.getSystemService(NotificationManager::class.java) ?: return
++      if (nm.getNotificationChannel(CHANNEL_ID) != null) return
++      nm.createNotificationChannel(
++        NotificationChannel(CHANNEL_ID, "Ongoing calls", NotificationManager.IMPORTANCE_LOW).apply {
++          description = "Shown while you are on a call"
++          setSound(null, null)
++          enableVibration(false)
++          lockscreenVisibility = Notification.VISIBILITY_PUBLIC
++        }
++      )
++    }
++  }
++
++  override fun onBind(intent: Intent?): IBinder? = null
++
++  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
++    val callId = intent?.getStringExtra(CallNotifications.EXTRA_CALL_ID)
++    if (callId == null) {
++      stopSelf()
++      return START_NOT_STICKY
++    }
++    val caller = intent?.getStringExtra(EXTRA_CALLER) ?: "Call"
++    val notification = buildNotification(callId, caller)
++    if (!startInForeground(notification)) stopSelf()
++    return START_NOT_STICKY
++  }
++
++  private fun startInForeground(notification: Notification): Boolean {
++    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
++      startForeground(NOTIFICATION_ID, notification)
++      return true
++    }
++    val types = mutableListOf(
++      ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
++      ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
++    )
++    if (Build.VERSION.SDK_INT < 34) types.add(ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
++    for (type in types) {
++      try {
++        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
++        return true
++      } catch (_: Exception) {
++        // Missing runtime prerequisite for this type: try the next one.
++      }
++    }
++    return false
++  }
++
++  @SuppressLint("LaunchActivityFromNotification")
++  private fun buildNotification(callId: String, caller: String): Notification {
++    ensureChannel(this)
++    val open = PendingIntent.getActivity(
++      this,
++      NOTIFICATION_ID,
++      (packageManager.getLaunchIntentForPackage(packageName) ?: Intent()).apply {
++        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
++      },
++      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
++    )
++    val hangUp = PendingIntent.getBroadcast(
++      this,
++      NOTIFICATION_ID + 1,
++      Intent(this, CallActionReceiver::class.java).apply {
++        action = BROADCAST_HANGUP
++        putExtra(CallNotifications.EXTRA_CALL_ID, callId)
++      },
++      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
++    )
++    val person = Person.Builder().setName(caller).setImportant(true).build()
++    return NotificationCompat.Builder(this, CHANNEL_ID)
++      .setSmallIcon(CallNotifications.smallIcon(this))
++      .setContentTitle(caller)
++      .setContentText("Ongoing voice call")
++      .setCategory(NotificationCompat.CATEGORY_CALL)
++      .setOngoing(true)
++      .setUsesChronometer(true)
++      .setWhen(System.currentTimeMillis())
++      .setContentIntent(open)
++      .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUp))
++      .addPerson(person)
++      .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
++      .build()
++  }
++
++  override fun onDestroy() {
++    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
++    super.onDestroy()
++  }
++}
+diff --git a/modules/call-ui/expo-module.config.json b/modules/call-ui/expo-module.config.json
+index 819013c..7b8e100 100644
+--- a/modules/call-ui/expo-module.config.json
++++ b/modules/call-ui/expo-module.config.json
+@@ -1,6 +1,10 @@
+ {
+-  "platforms": ["android"],
++  "platforms": ["android", "apple"],
+   "android": {
+     "modules": ["com.samadhan.callui.CallUiModule"]
++  },
++  "apple": {
++    "modules": ["CallUiModule"],
++    "appDelegateSubscribers": ["CallUiAppDelegateSubscriber"]
+   }
+ }
+diff --git a/modules/call-ui/index.js b/modules/call-ui/index.js
+index aea5981..8a742cd 100644
+--- a/modules/call-ui/index.js
++++ b/modules/call-ui/index.js
+@@ -1,19 +1,54 @@
+ import { Platform } from 'react-native';
+ import { requireOptionalNativeModule } from 'expo-modules-core';
+ 
+-const Native = Platform.OS === 'android' ? requireOptionalNativeModule('CallUi') : null;
++const Native = Platform.OS === 'android' || Platform.OS === 'ios' ? requireOptionalNativeModule('CallUi') : null;
++const isIOS = Platform.OS === 'ios';
+ 
+ const noop = () => {};
++const noSub = { remove: noop };
+ 
+ export const CallUi = {
+   isAvailable: !!Native,
++  /** iOS rings through CallKit (system UI); Android through a full-screen notification. */
++  usesCallKit: isIOS && !!Native,
++
++  setConfig: ({ deviceId = null, declineUrl = null }) => Native?.setConfig?.(deviceId, declineUrl),
++
+   showIncomingCall: ({ callId, callerName, subtitle = null, declineUrl = null, declineToken = null, timeoutMs = 45000 }) =>
+     Native?.showIncomingCall(String(callId), callerName || 'Incoming call', subtitle, declineUrl, declineToken, timeoutMs),
++  /** Stops ringing. Never ends a call that was already answered natively. */
+   dismissIncomingCall: (callId) => (callId ? Native?.dismissIncomingCall(String(callId)) : undefined),
+   dismissAllIncomingCalls: () => Native?.dismissAllIncomingCalls(),
+-  consumeLaunchAction: () => Native?.consumeLaunchAction() ?? null,
+-  setShowWhenLocked: (visible) => Native?.setShowWhenLocked(!!visible),
+-  canUseFullScreenIntent: () => (Native ? Native.canUseFullScreenIntent() : true),
+-  openFullScreenIntentSettings: () => Native?.openFullScreenIntentSettings(),
+-  addActionListener: (cb) => (Native ? Native.addListener('onAction', cb) : { remove: noop }),
++  /** Ends the native call in any state (CallKit call on iOS, ongoing-call service on Android). */
++  endCall: (callId) => (callId ? Native?.endCall?.(String(callId)) : undefined),
++
++  /** The app's current call (or null): new native rings are suppressed while busy. */
++  setActiveCall: (callId) => Native?.setActiveCall?.(callId ? String(callId) : null),
++  setMuted: (callId, muted) => (callId ? Native?.setMuted?.(String(callId), !!muted) : undefined),
++
++  /** Android: foreground service that keeps mic + audio alive while the call is in the background. */
++  startOngoingCall: ({ callId, callerName }) =>
++    callId ? Native?.startOngoingCall?.(String(callId), callerName || 'Call') : undefined,
++  stopOngoingCall: () => Native?.stopOngoingCall?.(),
++
++  /** Answer / decline / end taps that happened before JS was listening (cold start). */
++  consumePendingActions: () => {
++    if (!Native) return [];
++    if (typeof Native.consumePendingActions === 'function') return Native.consumePendingActions() ?? [];
++    const launch = Native.consumeLaunchAction?.();
++    return launch ? [launch] : [];
++  },
++
++  getVoipToken: () => (isIOS ? Native?.getVoipToken?.() ?? null : null),
++  addVoipTokenListener: (cb) => (isIOS && Native ? Native.addListener('onVoipToken', (e) => cb(e?.token || null)) : noSub),
++  isAudioSessionActive: () => (isIOS ? !!Native?.isAudioSessionActive?.() : false),
++  addAudioSessionListener: (cb) => (isIOS && Native ? Native.addListener('onAudioSession', (e) => cb(!!e?.active)) : noSub),
++
++  setShowWhenLocked: (visible) => Native?.setShowWhenLocked?.(!!visible),
++  canUseFullScreenIntent: () => (Native?.canUseFullScreenIntent ? Native.canUseFullScreenIntent() : true),
++  openFullScreenIntentSettings: () => Native?.openFullScreenIntentSettings?.(),
++  isIgnoringBatteryOptimizations: () => (Native?.isIgnoringBatteryOptimizations ? Native.isIgnoringBatteryOptimizations() : true),
++  openBatteryOptimizationSettings: () => Native?.openBatteryOptimizationSettings?.(),
++
++  addActionListener: (cb) => (Native ? Native.addListener('onAction', cb) : noSub),
+ };
+diff --git a/modules/call-ui/ios/CallManager.swift b/modules/call-ui/ios/CallManager.swift
+new file mode 100644
+index 0000000..9d68f01
+--- /dev/null
++++ b/modules/call-ui/ios/CallManager.swift
+@@ -0,0 +1,422 @@
++import AVFoundation
++import CallKit
++import Foundation
++import PushKit
++import UIKit
++
++/// PushKit VoIP + CallKit. Lives for the whole process and starts at launch (see CallUiAppDelegateSubscriber),
++/// because iOS delivers the VoIP push before JS is running and terminates apps that do not report it to CallKit.
++final class CallManager: NSObject {
++  static let shared = CallManager()
++
++  static let declineUrlKey = "SamadhanCallDeclineUrl"
++  private static let deviceIdDefaultsKey = "samadhan.callui.deviceId"
++  private static let declineUrlDefaultsKey = "samadhan.callui.declineUrl"
++  private static let defaultTimeoutMs: Double = 45_000
++
++  private struct Call {
++    let uuid: UUID
++    let callId: String
++    var answered = false
++    var muted = false
++    var declineToken: String?
++    var timeout: DispatchWorkItem?
++  }
++
++  private let provider: CXProvider
++  private let controller = CXCallController()
++  private var registry: PKPushRegistry?
++
++  // Main-thread state.
++  private var calls: [String: Call] = [:]
++  private var recentlyEnded: [String: Date] = [:]
++  private var activeJsCallId: String?
++
++  // Read from the JS thread: guarded by `lock`.
++  private let lock = NSLock()
++  private var _voipToken: String?
++  private var _audioActive = false
++  private var _pending: [[String: Any]] = []
++  private var _observing = false
++  private var emitter: ((String, [String: Any]) -> Void)?
++
++  private override init() {
++    let config = CXProviderConfiguration()
++    config.supportsVideo = false
++    config.maximumCallGroups = 1
++    config.maximumCallsPerCallGroup = 1
++    config.supportedHandleTypes = [.generic]
++    config.includesCallsInRecents = false
++    if let icon = UIImage(named: "CallKitIcon") {
++      config.iconTemplateImageData = icon.pngData()
++    }
++    provider = CXProvider(configuration: config)
++    super.init()
++    provider.setDelegate(self, queue: nil)
++  }
++
++  // MARK: - Lifecycle
++
++  func start() {
++    onMain {
++      guard self.registry == nil else { return }
++      let registry = PKPushRegistry(queue: .main)
++      registry.delegate = self
++      registry.desiredPushTypes = [.voIP]
++      self.registry = registry
++    }
++  }
++
++  func attach(_ emit: @escaping (String, [String: Any]) -> Void) {
++    locked { emitter = emit }
++  }
++
++  func detach() {
++    locked {
++      emitter = nil
++      _observing = false
++    }
++  }
++
++  func setObserving(_ value: Bool) {
++    locked { _observing = value }
++  }
++
++  var voipToken: String? { locked { _voipToken } }
++  var isAudioSessionActive: Bool { locked { _audioActive } }
++
++  func consumePendingActions() -> [[String: Any]] {
++    locked {
++      let out = _pending
++      _pending.removeAll()
++      return out
++    }
++  }
++
++  func setConfig(deviceId: String?, declineUrl: String?) {
++    let defaults = UserDefaults.standard
++    if let deviceId, !deviceId.isEmpty { defaults.set(deviceId, forKey: Self.deviceIdDefaultsKey) }
++    if let declineUrl, !declineUrl.isEmpty { defaults.set(declineUrl, forKey: Self.declineUrlDefaultsKey) }
++  }
++
++  // MARK: - JS-facing call control
++
++  func showIncoming(callId: String, callerName: String, declineToken: String?, timeoutMs: Double) {
++    onMain {
++      self.reportIncoming(callId: callId, callerName: callerName, declineToken: declineToken, timeoutMs: timeoutMs, fromPush: false) {}
++    }
++  }
++
++  /// Stops ringing (the in-app screen took over, or the call went away). Never touches an answered call.
++  func dismissIncoming(callId: String) {
++    onMain {
++      guard let call = self.calls[callId], !call.answered else { return }
++      self.endLocally(callId, reason: .remoteEnded)
++    }
++  }
++
++  func dismissAll() {
++    onMain {
++      for (id, call) in self.calls where !call.answered { self.endLocally(id, reason: .remoteEnded) }
++    }
++  }
++
++  /// Ends the native call in any state (the app's call ended).
++  func endCall(callId: String) {
++    onMain {
++      guard self.calls[callId] != nil else { return }
++      self.endLocally(callId, reason: .remoteEnded)
++    }
++  }
++
++  func setMuted(callId: String, muted: Bool) {
++    onMain {
++      guard let call = self.calls[callId], call.answered, call.muted != muted else { return }
++      self.calls[callId]?.muted = muted
++      self.controller.request(CXTransaction(action: CXSetMutedCallAction(call: call.uuid, muted: muted))) { _ in }
++    }
++  }
++
++  /// The app's own call state; a new invite while busy is reported and ended at once (busy).
++  func setActiveCall(_ callId: String?) {
++    onMain { self.activeJsCallId = (callId?.isEmpty ?? true) ? nil : callId }
++  }
++
++  // MARK: - Reporting
++
++  private func baseUpdate(_ callerName: String) -> CXCallUpdate {
++    let update = CXCallUpdate()
++    update.remoteHandle = CXHandle(type: .generic, value: callerName)
++    update.localizedCallerName = callerName
++    update.hasVideo = false
++    update.supportsHolding = false
++    update.supportsGrouping = false
++    update.supportsUngrouping = false
++    update.supportsDTMF = false
++    return update
++  }
++
++  private func isBusy(except callId: String) -> Bool {
++    if let active = activeJsCallId, active != callId { return true }
++    return calls.values.contains { $0.answered && $0.callId != callId }
++  }
++
++  private func reportIncoming(callId: String, callerName: String, declineToken: String?, timeoutMs: Double, fromPush: Bool, completion: @escaping () -> Void) {
++    if let existing = calls[callId] {
++      if let declineToken, existing.declineToken == nil { calls[callId]?.declineToken = declineToken }
++      guard fromPush else { return completion() }
++      // Same call already on screen: re-reporting its UUID satisfies PushKit (CallKit answers callUUIDAlreadyExists).
++      provider.reportNewIncomingCall(with: existing.uuid, update: baseUpdate(callerName)) { _ in completion() }
++      return
++    }
++
++    if wasRecentlyEnded(callId) || isBusy(except: callId) {
++      guard fromPush else { return completion() }
++      return reportAndEnd(completion)
++    }
++
++    let uuid = UUID()
++    calls[callId] = Call(uuid: uuid, callId: callId, declineToken: declineToken)
++
++    provider.reportNewIncomingCall(with: uuid, update: baseUpdate(callerName)) { error in
++      guard error == nil else {
++        if self.calls[callId]?.uuid == uuid { self.calls[callId] = nil }
++        completion()
++        return
++      }
++      let timeout = DispatchWorkItem { [weak self] in
++        guard let self, let call = self.calls[callId], call.uuid == uuid, !call.answered else { return }
++        self.endLocally(callId, reason: .unanswered)
++      }
++      self.calls[callId]?.timeout = timeout
++      let ms = max(5_000, min(timeoutMs > 0 ? timeoutMs : Self.defaultTimeoutMs, 120_000))
++      DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(ms)), execute: timeout)
++      // Lets JS connect the socket early so the buffered invite/offer are ready when the user answers.
++      self.emit(["action": "show", "callId": callId], queueIfNoListener: false)
++      completion()
++    }
++  }
++
++  /// Every VoIP push must produce a CallKit report. For pushes that should not ring, report and end immediately.
++  private func reportAndEnd(_ completion: @escaping () -> Void) {
++    let uuid = UUID()
++    provider.reportNewIncomingCall(with: uuid, update: baseUpdate("Call ended")) { _ in
++      self.provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
++      completion()
++    }
++  }
++
++  private func handleCancel(callId: String, reason: String?, completion: @escaping () -> Void) {
++    guard let call = calls[callId] else { return reportAndEnd(completion) }
++    provider.reportNewIncomingCall(with: call.uuid, update: baseUpdate("Call ended")) { _ in
++      if let current = self.calls[callId], !current.answered {
++        self.endLocally(callId, reason: Self.endReason(reason))
++      }
++      completion()
++    }
++  }
++
++  private static func endReason(_ reason: String?) -> CXCallEndedReason {
++    switch reason {
++    case "answered_elsewhere": return .answeredElsewhere
++    case "declined_elsewhere": return .declinedElsewhere
++    default: return .remoteEnded
++    }
++  }
++
++  private func endLocally(_ callId: String, reason: CXCallEndedReason) {
++    guard let call = calls.removeValue(forKey: callId) else { return }
++    call.timeout?.cancel()
++    markEnded(callId)
++    provider.reportCall(with: call.uuid, endedAt: Date(), reason: reason)
++  }
++
++  private func markEnded(_ callId: String) {
++    let now = Date()
++    recentlyEnded = recentlyEnded.filter { now.timeIntervalSince($0.value) < 120 }
++    recentlyEnded[callId] = now
++  }
++
++  private func wasRecentlyEnded(_ callId: String) -> Bool {
++    guard let at = recentlyEnded[callId] else { return false }
++    return Date().timeIntervalSince(at) < 120
++  }
++
++  private func find(_ uuid: UUID) -> Call? {
++    calls.values.first { $0.uuid == uuid }
++  }
++
++  // MARK: - Decline without JS
++
++  private func postDecline(_ call: Call) {
++    guard let token = call.declineToken, !token.isEmpty else { return }
++    let defaults = UserDefaults.standard
++    let urlString = defaults.string(forKey: Self.declineUrlDefaultsKey)
++      ?? Bundle.main.object(forInfoDictionaryKey: Self.declineUrlKey) as? String
++    guard let urlString, let url = URL(string: urlString) else { return }
++
++    var body: [String: Any] = ["callId": call.callId, "token": token]
++    if let deviceId = defaults.string(forKey: Self.deviceIdDefaultsKey) { body["deviceId"] = deviceId }
++
++    var request = URLRequest(url: url, timeoutInterval: 10)
++    request.httpMethod = "POST"
++    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
++    request.httpBody = try? JSONSerialization.data(withJSONObject: body)
++
++    var task: UIBackgroundTaskIdentifier = .invalid
++    task = UIApplication.shared.beginBackgroundTask(withName: "samadhan-call-decline") {
++      UIApplication.shared.endBackgroundTask(task)
++      task = .invalid
++    }
++    URLSession.shared.dataTask(with: request) { _, _, _ in
++      DispatchQueue.main.async {
++        if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
++        task = .invalid
++      }
++    }.resume()
++  }
++
++  private func configureAudioSession() {
++    let session = AVAudioSession.sharedInstance()
++    try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
++  }
++
++  // MARK: - Events
++
++  /// Answer/decline/end are queued while JS is not listening (cold start from the lock screen) and drained at mount.
++  private func emit(_ body: [String: Any], queueIfNoListener: Bool) {
++    let send: ((String, [String: Any]) -> Void)? = locked {
++      if _observing, let emitter { return emitter }
++      if queueIfNoListener {
++        _pending.removeAll { ($0["callId"] as? String) == (body["callId"] as? String) && ($0["action"] as? String) == (body["action"] as? String) }
++        _pending.append(body.merging(["at": Date().timeIntervalSince1970 * 1000]) { a, _ in a })
++      }
++      return nil
++    }
++    send?("onAction", body)
++  }
++
++  private func emitRaw(_ name: String, _ body: [String: Any]) {
++    let send = locked { emitter }
++    send?(name, body)
++  }
++
++  // MARK: - Helpers
++
++  private func onMain(_ work: @escaping () -> Void) {
++    if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
++  }
++
++  @discardableResult
++  private func locked<T>(_ work: () -> T) -> T {
++    lock.lock()
++    defer { lock.unlock() }
++    return work()
++  }
++}
++
++// MARK: - PushKit
++
++extension CallManager: PKPushRegistryDelegate {
++  func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
++    guard type == .voIP else { return }
++    let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
++    locked { _voipToken = token }
++    emitRaw("onVoipToken", ["token": token])
++  }
++
++  func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
++    guard type == .voIP else { return }
++    locked { _voipToken = nil }
++    emitRaw("onVoipToken", ["token": ""])
++  }
++
++  func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
++    guard type == .voIP else { return completion() }
++    let data = payload.dictionaryPayload
++    let kind = data["type"] as? String ?? ""
++    let callId = (data["callId"] as? String) ?? ""
++    let expiresAt: Double? = (data["expiresAt"] as? String).flatMap(Double.init) ?? (data["expiresAt"] as? NSNumber)?.doubleValue
++    let nowMs = Date().timeIntervalSince1970 * 1000
++
++    switch kind {
++    case "call_invite" where !callId.isEmpty:
++      if let expiresAt, nowMs >= expiresAt { return reportAndEnd(completion) }
++      let callerName = (data["callerName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Incoming call"
++      reportIncoming(
++        callId: callId,
++        callerName: callerName,
++        declineToken: data["declineToken"] as? String,
++        timeoutMs: expiresAt.map { $0 - nowMs } ?? Self.defaultTimeoutMs,
++        fromPush: true,
++        completion: completion
++      )
++    case "call_cancel" where !callId.isEmpty:
++      handleCancel(callId: callId, reason: data["reason"] as? String, completion: completion)
++    default:
++      reportAndEnd(completion)
++    }
++  }
++}
++
++// MARK: - CallKit
++
++extension CallManager: CXProviderDelegate {
++  func providerDidReset(_ provider: CXProvider) {
++    for call in calls.values {
++      call.timeout?.cancel()
++      if call.answered { emit(["action": "end", "callId": call.callId], queueIfNoListener: false) }
++    }
++    calls.removeAll()
++    locked { _audioActive = false }
++  }
++
++  func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
++    guard let call = find(action.callUUID) else { return action.fail() }
++    call.timeout?.cancel()
++    calls[call.callId]?.answered = true
++    calls[call.callId]?.timeout = nil
++    configureAudioSession()
++    action.fulfill()
++    emit(["action": "answer", "callId": call.callId], queueIfNoListener: true)
++  }
++
++  func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
++    guard let call = find(action.callUUID) else { return action.fulfill() }
++    call.timeout?.cancel()
++    calls[call.callId] = nil
++    markEnded(call.callId)
++    if call.answered {
++      emit(["action": "end", "callId": call.callId], queueIfNoListener: true)
++    } else {
++      postDecline(call)
++      emit(["action": "decline", "callId": call.callId], queueIfNoListener: true)
++    }
++    action.fulfill()
++  }
++
++  func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
++    guard let call = find(action.callUUID) else { return action.fail() }
++    calls[call.callId]?.muted = action.isMuted
++    emit(["action": "mute", "callId": call.callId, "muted": action.isMuted], queueIfNoListener: false)
++    action.fulfill()
++  }
++
++  func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
++    action.fail()
++  }
++
++  func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {
++    action.fulfill()
++  }
++
++  func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
++    locked { _audioActive = true }
++    emitRaw("onAudioSession", ["active": true])
++  }
++
++  func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
++    locked { _audioActive = false }
++    emitRaw("onAudioSession", ["active": false])
++  }
++}
+diff --git a/modules/call-ui/ios/CallUi.podspec b/modules/call-ui/ios/CallUi.podspec
+new file mode 100644
+index 0000000..c1707de
+--- /dev/null
++++ b/modules/call-ui/ios/CallUi.podspec
+@@ -0,0 +1,22 @@
++Pod::Spec.new do |s|
++  s.name           = 'CallUi'
++  s.version        = '1.0.0'
++  s.summary        = 'Samadhan native incoming calls: PushKit VoIP + CallKit'
++  s.description    = 'Rings incoming calls through CallKit from PushKit VoIP pushes, even when the app is killed.'
++  s.license        = 'UNLICENSED'
++  s.author         = 'Samadhan'
++  s.homepage       = 'https://samadhan.fab5connect.com'
++  s.platforms      = { :ios => '16.4' }
++  s.source         = { git: '' }
++  s.static_framework = true
++  s.swift_version  = '5.9'
++
++  s.dependency 'ExpoModulesCore'
++  s.frameworks = 'CallKit', 'PushKit', 'AVFoundation'
++
++  s.source_files = '**/*.{h,m,swift}'
++  s.pod_target_xcconfig = {
++    'DEFINES_MODULE' => 'YES',
++    'SWIFT_COMPILATION_MODE' => 'wholemodule'
++  }
++end
+diff --git a/modules/call-ui/ios/CallUiAppDelegateSubscriber.swift b/modules/call-ui/ios/CallUiAppDelegateSubscriber.swift
+new file mode 100644
+index 0000000..d48ff41
+--- /dev/null
++++ b/modules/call-ui/ios/CallUiAppDelegateSubscriber.swift
+@@ -0,0 +1,13 @@
++import ExpoModulesCore
++import UIKit
++
++/// Registers for VoIP pushes at launch, including a launch caused by a VoIP push while the app was killed.
++public class CallUiAppDelegateSubscriber: ExpoAppDelegateSubscriber {
++  public func application(
++    _ application: UIApplication,
++    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
++  ) -> Bool {
++    CallManager.shared.start()
++    return true
++  }
++}
+diff --git a/modules/call-ui/ios/CallUiModule.swift b/modules/call-ui/ios/CallUiModule.swift
+new file mode 100644
+index 0000000..1bcd1cf
+--- /dev/null
++++ b/modules/call-ui/ios/CallUiModule.swift
+@@ -0,0 +1,69 @@
++import ExpoModulesCore
++
++public class CallUiModule: Module {
++  public func definition() -> ModuleDefinition {
++    Name("CallUi")
++
++    Events("onAction", "onVoipToken", "onAudioSession")
++
++    OnCreate {
++      CallManager.shared.attach { [weak self] name, body in
++        self?.sendEvent(name, body)
++      }
++      CallManager.shared.start()
++    }
++
++    OnDestroy {
++      CallManager.shared.detach()
++    }
++
++    OnStartObserving {
++      CallManager.shared.setObserving(true)
++    }
++
++    OnStopObserving {
++      CallManager.shared.setObserving(false)
++    }
++
++    Function("getVoipToken") { () -> String? in
++      CallManager.shared.voipToken
++    }
++
++    Function("setConfig") { (deviceId: String?, declineUrl: String?) in
++      CallManager.shared.setConfig(deviceId: deviceId, declineUrl: declineUrl)
++    }
++
++    Function("showIncomingCall") { (callId: String, callerName: String, subtitle: String?, declineUrl: String?, declineToken: String?, timeoutMs: Double) in
++      if let declineUrl { CallManager.shared.setConfig(deviceId: nil, declineUrl: declineUrl) }
++      CallManager.shared.showIncoming(callId: callId, callerName: callerName, declineToken: declineToken, timeoutMs: timeoutMs)
++    }
++
++    Function("dismissIncomingCall") { (callId: String) in
++      CallManager.shared.dismissIncoming(callId: callId)
++    }
++
++    Function("dismissAllIncomingCalls") {
++      CallManager.shared.dismissAll()
++    }
++
++    Function("endCall") { (callId: String) in
++      CallManager.shared.endCall(callId: callId)
++    }
++
++    Function("setMuted") { (callId: String, muted: Bool) in
++      CallManager.shared.setMuted(callId: callId, muted: muted)
++    }
++
++    Function("setActiveCall") { (callId: String?) in
++      CallManager.shared.setActiveCall(callId)
++    }
++
++    Function("consumePendingActions") { () -> [[String: Any]] in
++      CallManager.shared.consumePendingActions()
++    }
++
++    Function("isAudioSessionActive") { () -> Bool in
++      CallManager.shared.isAudioSessionActive
++    }
++  }
++}
+diff --git a/src/calls/backgroundCallTask.js b/src/calls/backgroundCallTask.js
+index 09c627f..ce88b5b 100644
+--- a/src/calls/backgroundCallTask.js
++++ b/src/calls/backgroundCallTask.js
+@@ -1,5 +1,6 @@
+ // src/calls/backgroundCallTask.js
+-// Loaded from index.js so it is defined when Android wakes the JS bundle headlessly for a data-only push.
++// Loaded from index.js so it is defined when Android wakes the JS bundle headlessly for a data-only push
++// (FCM direct from the Notification Service, or the legacy Expo push). iOS rings natively via PushKit/CallKit.
+ import { AppState } from 'react-native';
+ import * as TaskManager from 'expo-task-manager';
+ import Constants from 'expo-constants';
+@@ -53,13 +54,15 @@ if (!TaskManager.isTaskDefined(CALL_PUSH_TASK)) {
+ 
+     if (msg.type === 'call_invite') {
+       if (AppState.currentState === 'active') return;
++      const expiresAt = Number(msg.expiresAt) || 0;
++      if (expiresAt && Date.now() >= expiresAt) return;
+       CallUi.showIncomingCall({
+         callId: msg.callId,
+         callerName: msg.callerName,
+         subtitle: callSubtitle(msg.ticketNumber),
+         declineUrl: DECLINE_URL,
+         declineToken: msg.declineToken ?? null,
+-        timeoutMs: INCOMING_TIMEOUT_MS,
++        timeoutMs: expiresAt ? Math.min(INCOMING_TIMEOUT_MS, expiresAt - Date.now()) : INCOMING_TIMEOUT_MS,
+       });
+       return;
+     }
+diff --git a/src/context/CallProvider.js b/src/context/CallProvider.js
+index d68b583..f6d7a61 100644
+--- a/src/context/CallProvider.js
++++ b/src/context/CallProvider.js
+@@ -1,6 +1,8 @@
+ // src/context/CallProvider.js
+ import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+-import { Alert, AppState } from 'react-native';
++import { Alert, AppState, Platform } from 'react-native';
++import * as Device from 'expo-device';
++import { RTCAudioSession } from 'react-native-webrtc';
+ import { useCall, CALL_STATUS, END_REASON } from '@/hooks/useCall';
+ import IncomingCallModal from '@/components/calls/IncomingCallModal';
+ import InCallScreen from '@/components/calls/InCallScreen';
+@@ -9,6 +11,7 @@ import { callAudio } from '@/calls/callAudio';
+ import { DEFAULT_TUNE } from '@/calls/ringbackTunes';
+ import { DECLINE_URL, INCOMING_TIMEOUT_MS, callSubtitle } from '@/calls/backgroundCallTask';
+ import { storage } from '@/utils/storage';
++import { getDeviceId } from '@/notifications/deviceId';
+ import { useAuthStore } from '@/store/authStore';
+ import { CallUi } from '../../modules/call-ui';
+ 
+@@ -23,7 +26,24 @@ const END_MESSAGES = {
+ };
+ 
+ const FSI_PROMPT_KEY = 'call_fsi_prompted_v1';
++const BATTERY_PROMPT_KEY = 'call_battery_prompted_v1';
+ const PENDING_ACTION_TTL_MS = 30000;
++const ACTIVE_STATUSES = [CALL_STATUS.RINGING_OUTGOING, CALL_STATUS.CONNECTING, CALL_STATUS.CONNECTED];
++// OEMs known to kill background apps: incoming calls need an explicit battery exemption there.
++const AGGRESSIVE_OEMS = ['xiaomi', 'redmi', 'poco', 'oppo', 'realme', 'oneplus', 'vivo', 'iqoo', 'samsung', 'huawei', 'honor', 'tecno', 'infinix', 'itel', 'motorola', 'asus', 'meizu', 'lenovo'];
++
++function isAggressiveOem() {
++  const maker = `${Device.manufacturer ?? ''} ${Device.brand ?? ''}`.toLowerCase();
++  return AGGRESSIVE_OEMS.some((m) => maker.includes(m));
++}
++
++function syncWebRtcAudio(active) {
++  if (Platform.OS !== 'ios') return;
++  try {
++    if (active) RTCAudioSession.audioSessionDidActivate();
++    else RTCAudioSession.audioSessionDidDeactivate();
++  } catch {}
++}
+ 
+ function useAppActive() {
+   const [active, setActive] = useState(AppState.currentState === 'active');
+@@ -48,6 +68,13 @@ export function CallProvider({ children }) {
+   const incoming = call.incomingCall;
+   const showIncoming = call.status === CALL_STATUS.RINGING_INCOMING && !!incoming;
+ 
++  /* ── native call UI config (decline without JS, skip this device on cancel) ── */
++  useEffect(() => {
++    getDeviceId()
++      .then((deviceId) => CallUi.setConfig({ deviceId, declineUrl: DECLINE_URL }))
++      .catch(() => {});
++  }, []);
++
+   /* ── signaling listeners follow the active socket ─────────── */
+   useEffect(() => {
+     let detach = () => {};
+@@ -117,15 +144,56 @@ export function CallProvider({ children }) {
+       return;
+     }
+     if (ringingIdRef.current) {
+-      CallUi.dismissIncomingCall(ringingIdRef.current);
++      // Ended without being taken by the app (caller left, declined, stale): also end a call answered natively.
++      if (call.status === CALL_STATUS.IDLE) CallUi.endCall(ringingIdRef.current);
++      else CallUi.dismissIncomingCall(ringingIdRef.current);
+       ringingIdRef.current = null;
+     }
+-  }, [showIncoming, incoming?.callId, appActive]);
++  }, [showIncoming, incoming?.callId, appActive, call.status]);
+ 
+   useEffect(() => {
+     if (call.status === CALL_STATUS.IDLE) CallUi.setShowWhenLocked(false);
+   }, [call.status]);
+ 
++  /* ── native call state follows the app's call ─────────────── */
++  const nativeCallIdRef = useRef(null);
++  const inCall = ACTIVE_STATUSES.includes(call.status);
++
++  useEffect(() => {
++    if (inCall && call.activeCallId) {
++      nativeCallIdRef.current = call.activeCallId;
++      CallUi.setActiveCall(call.activeCallId);
++      return;
++    }
++    if (call.status === CALL_STATUS.IDLE) {
++      CallUi.setActiveCall(null);
++      CallUi.stopOngoingCall();
++      if (nativeCallIdRef.current) {
++        CallUi.endCall(nativeCallIdRef.current);
++        nativeCallIdRef.current = null;
++      }
++    }
++  }, [inCall, call.status, call.activeCallId]);
++
++  // Android: keep mic + audio alive in the background once the mic is actually open.
++  const hasLocalStream = !!call.localStream;
++  useEffect(() => {
++    const live = (call.status === CALL_STATUS.CONNECTING || call.status === CALL_STATUS.CONNECTED) && hasLocalStream;
++    if (live && call.activeCallId) CallUi.startOngoingCall({ callId: call.activeCallId, callerName: call.peerName });
++  }, [call.status, hasLocalStream, call.activeCallId, call.peerName]);
++
++  // iOS: mute button in the CallKit UI and in the app stay in step.
++  useEffect(() => {
++    if (inCall && call.activeCallId) CallUi.setMuted(call.activeCallId, call.isMuted);
++  }, [inCall, call.activeCallId, call.isMuted]);
++
++  // iOS: CallKit owns the audio session; WebRTC must be told when it is activated.
++  useEffect(() => {
++    if (CallUi.isAudioSessionActive()) syncWebRtcAudio(true);
++    const sub = CallUi.addAudioSessionListener(syncWebRtcAudio);
++    return () => sub.remove();
++  }, []);
++
+   /* ── stale ringing: confirm with the server whenever the app wakes ── */
+   useEffect(() => {
+     if (appActive && call.status === CALL_STATUS.RINGING_INCOMING) call.verifyIncoming();
+@@ -157,28 +225,59 @@ export function CallProvider({ children }) {
+     }
+   }, [call.acceptCall]);
+ 
+-  /* ── actions from the native call notification ─────────────── */
++  /* ── actions from the native call UI (notification / CallKit) ── */
++  const callRef = useRef(call);
++  callRef.current = call;
++
+   const handleNativeAction = useCallback((evt) => {
+     if (!evt?.callId || !evt?.action) return;
+-    setPendingAction({ action: evt.action, callId: String(evt.callId), at: Date.now() });
++    const callId = String(evt.callId);
++    const at = Number(evt.at) || Date.now();
++    if (Date.now() - at > PENDING_ACTION_TTL_MS) return;
++    const current = callRef.current;
++    const isCurrent = current.activeCallId === callId;
++
++    if (evt.action === 'mute') {
++      if (isCurrent) current.setMuted(!!evt.muted);
++      return;
++    }
++    if (evt.action === 'end') {
++      setPendingAction((prev) => (prev?.callId === callId ? null : prev));
++      if (isCurrent) current.endCall();
++      else if (current.incomingCall?.callId === callId) current.rejectCall();
++      return;
++    }
++    setPendingAction({ action: evt.action, callId, at });
+     connectSocket();
+   }, []);
+ 
++  const drainNativeActions = useCallback(() => {
++    for (const evt of CallUi.consumePendingActions()) handleNativeAction(evt);
++  }, [handleNativeAction]);
++
+   useEffect(() => {
+     const sub = CallUi.addActionListener(handleNativeAction);
+-    handleNativeAction(CallUi.consumeLaunchAction());
++    drainNativeActions();
+     return () => sub.remove();
+-  }, [handleNativeAction]);
++  }, [handleNativeAction, drainNativeActions]);
+ 
+   useEffect(() => {
+-    if (appActive) handleNativeAction(CallUi.consumeLaunchAction());
+-  }, [appActive, handleNativeAction]);
++    if (appActive) drainNativeActions();
++  }, [appActive, drainNativeActions]);
+ 
+   useEffect(() => {
+     if (!pendingAction) return undefined;
++    const expire = () => {
++      setPendingAction(null);
++      if (pendingAction.action === 'answer' && callRef.current.activeCallId !== pendingAction.callId) {
++        // Answered on the lock screen but the invite never arrived (offline, or the caller already left).
++        CallUi.endCall(pendingAction.callId);
++        Alert.alert('Call ended', "Couldn't connect the call. Check your connection and call back.");
++      }
++    };
+     const left = PENDING_ACTION_TTL_MS - (Date.now() - pendingAction.at);
+     if (left <= 0) {
+-      setPendingAction(null);
++      expire();
+       return undefined;
+     }
+     if (showIncoming && incoming.callId === pendingAction.callId) {
+@@ -195,7 +294,7 @@ export function CallProvider({ children }) {
+       }
+       return undefined;
+     }
+-    const t = setTimeout(() => setPendingAction(null), left);
++    const t = setTimeout(expire, left);
+     return () => clearTimeout(t);
+   }, [pendingAction, showIncoming, incoming?.callId, incoming?.offerSdp, call.rejectCall, handleAccept]);
+ 
+@@ -221,6 +320,29 @@ export function CallProvider({ children }) {
+     };
+   }, [isAuthenticated]);
+ 
++  /* ── one-time battery exemption on OEMs that kill background apps ── */
++  useEffect(() => {
++    if (Platform.OS !== 'android' || !isAuthenticated || !CallUi.isAvailable) return;
++    if (!isAggressiveOem() || CallUi.isIgnoringBatteryOptimizations()) return;
++    let cancelled = false;
++    (async () => {
++      const asked = await storage.getItemAsync(BATTERY_PROMPT_KEY).catch(() => null);
++      if (asked || cancelled) return;
++      await storage.setItemAsync(BATTERY_PROMPT_KEY, '1').catch(() => {});
++      Alert.alert(
++        "Don't miss calls",
++        'Your phone may stop Samadhan in the background, so calls would not ring. Allow Samadhan to run in the background (set battery to "Unrestricted" and turn on Autostart if your phone has it).',
++        [
++          { text: 'Not now', style: 'cancel' },
++          { text: 'Open settings', onPress: () => CallUi.openBatteryOptimizationSettings() },
++        ]
++      );
++    })();
++    return () => {
++      cancelled = true;
++    };
++  }, [isAuthenticated]);
++
+   const showInCall = [
+     CALL_STATUS.RINGING_OUTGOING,
+     CALL_STATUS.CONNECTING,
+diff --git a/src/hooks/useCall.js b/src/hooks/useCall.js
+index 40620c5..8b1c7cf 100644
+--- a/src/hooks/useCall.js
++++ b/src/hooks/useCall.js
+@@ -53,6 +53,7 @@ export function useCall() {
+   const [endReason, setEndReason] = useState(null);
+   const [peer, setPeer] = useState(null);
+   const [ringback, setRingback] = useState(null);
++  const [activeCallId, setActiveCallId] = useState(null);
+ 
+   const pcRef = useRef(null);
+   const callIdRef = useRef(null);
+@@ -100,6 +101,7 @@ export function useCall() {
+       setIncomingCall(null);
+       setPeer(null);
+       setRingback(null);
++      setActiveCallId(null);
+       setEndReason(reason);
+       setStatusSafe(CALL_STATUS.IDLE);
+     },
+@@ -223,6 +225,7 @@ export function useCall() {
+ 
+       const callId = `${user.id}-${Date.now()}`;
+       callIdRef.current = callId;
++      setActiveCallId(callId);
+       peerEmailRef.current = toEmail;
+       setPeer({ name: peerName || toEmail, ticketNumber: ticketNumber ?? null });
+       setEndReason(null);
+@@ -288,6 +291,7 @@ export function useCall() {
+     if (!(await verifyIncoming())) return;
+     if (ringingCallIdRef.current !== callId) return;
+     callIdRef.current = callId;
++    setActiveCallId(callId);
+     ringingCallIdRef.current = null;
+     peerEmailRef.current = fromEmail;
+     setPeer({ name: callerName || fromEmail, ticketNumber: ticketNumber ?? null });
+@@ -332,6 +336,17 @@ export function useCall() {
+     setIsMuted(!track.enabled);
+   }, [localStream]);
+ 
++  /** Idempotent: used to follow the system call UI (CallKit mute button). */
++  const setMuted = useCallback(
++    (muted) => {
++      const track = localStream?.getAudioTracks()[0];
++      if (!track) return;
++      track.enabled = !muted;
++      setIsMuted(!!muted);
++    },
++    [localStream]
++  );
++
+   const attachSignalingListeners = useCallback(
+     (socket) =>
+       bindCallListeners(
+@@ -438,6 +453,7 @@ export function useCall() {
+     incomingCall,
+     endReason,
+     ringback,
++    activeCallId,
+     peerName: peer?.name ?? null,
+     ticketNumber: peer?.ticketNumber ?? null,
+     startCall,
+@@ -447,6 +463,7 @@ export function useCall() {
+     endCall,
+     cancelOutgoing,
+     toggleMute,
++    setMuted,
+     attachSignalingListeners,
+   };
+ }
+\ No newline at end of file
+diff --git a/src/hooks/usePushNotifications.js b/src/hooks/usePushNotifications.js
+index 92d04a5..b258ef6 100644
+--- a/src/hooks/usePushNotifications.js
++++ b/src/hooks/usePushNotifications.js
+@@ -8,10 +8,11 @@ import { useRouter, useRootNavigationState } from 'expo-router';
+ import { useAuthStore } from '../store/authStore';
+ import { queryClient } from '../api/queryClient';
+ import { notificationService, isNotificationServiceConfigured } from '../api/notificationService';
+-import { registerPushToken } from '../notifications/pushRegistration';
++import { registerCallToken, registerPushToken } from '../notifications/pushRegistration';
++import { CallUi } from '../../modules/call-ui';
+ import { CHANNELS } from '../notifications/channels';
+ 
+-const SILENT_IN_FOREGROUND = new Set(['call_invite']);
++const SILENT_IN_FOREGROUND = new Set(['call_invite', 'call_cancel']);
+ const REREGISTER_AFTER_MS = 6 * 60 * 60 * 1000;
+ 
+ const ROLE_PATHS = {
+@@ -101,6 +102,22 @@ async function registerWithRetry(isCancelled) {
+   }
+ }
+ 
++async function registerCallTokenWithRetry(isCancelled, known = null) {
++  for (let attempt = 0; attempt < 3; attempt++) {
++    try {
++      if (isCancelled()) return;
++      await registerCallToken(known);
++      return;
++    } catch {
++      await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
++    }
++  }
++}
++
++function registerAll(isCancelled) {
++  return Promise.all([registerWithRetry(isCancelled), registerCallTokenWithRetry(isCancelled)]);
++}
++
+ function refreshAfterNotification(data) {
+   queryClient.invalidateQueries({ queryKey: ['tickets'] });
+   if (data?.ticketId) {
+@@ -125,7 +142,7 @@ export function usePushNotifications() {
+   useEffect(() => {
+     if (!isAuthenticated) return;
+     let cancelled = false;
+-    registerWithRetry(() => cancelled).then(() => {
++    registerAll(() => cancelled).then(() => {
+       lastRegisteredAt.current = Date.now();
+     });
+     return () => {
+@@ -137,11 +154,20 @@ export function usePushNotifications() {
+   useEffect(() => {
+     if (!isAuthenticated || !isPushAvailable || typeof Notifications.addPushTokenListener !== 'function') return;
+     const sub = Notifications.addPushTokenListener(() => {
+-      registerWithRetry(() => false);
++      registerAll(() => false);
+     });
+     return () => sub?.remove?.();
+   }, [isAuthenticated]);
+ 
++  // PushKit hands out / rotates the VoIP token on its own schedule (iOS).
++  useEffect(() => {
++    if (!isAuthenticated) return;
++    const sub = CallUi.addVoipTokenListener((token) => {
++      if (token) registerCallTokenWithRetry(() => false, { kind: 'apns_voip', token });
++    });
++    return () => sub.remove();
++  }, [isAuthenticated]);
++
+   // Re-register after long background periods so "last seen" stays fresh and dead rows self-heal.
+   useEffect(() => {
+     if (!isAuthenticated) return;
+@@ -149,7 +175,7 @@ export function usePushNotifications() {
+       if (state !== 'active') return;
+       if (Date.now() - lastRegisteredAt.current < REREGISTER_AFTER_MS) return;
+       lastRegisteredAt.current = Date.now();
+-      registerWithRetry(() => false);
++      registerAll(() => false);
+     });
+     return () => sub.remove();
+   }, [isAuthenticated]);
+diff --git a/src/notifications/pushRegistration.js b/src/notifications/pushRegistration.js
+index 43781f6..4c8a238 100644
+--- a/src/notifications/pushRegistration.js
++++ b/src/notifications/pushRegistration.js
+@@ -1,5 +1,9 @@
+ import { Platform } from 'react-native';
+ import * as Application from 'expo-application';
++import * as Device from 'expo-device';
++import Notifications, { isPushAvailable } from '../utils/notificationsSafe';
++import { DECLINE_URL } from '../calls/backgroundCallTask';
++import { CallUi } from '../../modules/call-ui';
+ import { storage } from '../utils/storage';
+ import { userService } from '../api/userService';
+ import { notificationService, isNotificationServiceConfigured } from '../api/notificationService';
+@@ -49,3 +53,56 @@ export async function unregisterPushToken() {
+   await Promise.allSettled(jobs);
+   await storage.deleteItemAsync(TOKEN_KEY).catch(() => {});
+ }
++
++const VOIP_WAIT_MS = 10000;
++
++function waitForVoipToken() {
++  const current = CallUi.getVoipToken();
++  if (current) return Promise.resolve(current);
++  return new Promise((resolve) => {
++    const sub = CallUi.addVoipTokenListener((token) => {
++      if (!token) return;
++      clearTimeout(timer);
++      sub.remove();
++      resolve(token);
++    });
++    const timer = setTimeout(() => {
++      sub.remove();
++      resolve(CallUi.getVoipToken());
++    }, VOIP_WAIT_MS);
++  });
++}
++
++async function getNativeCallToken() {
++  if (!CallUi.isAvailable) return null;
++  if (Platform.OS === 'ios') {
++    const token = await waitForVoipToken();
++    return token ? { kind: 'apns_voip', token } : null;
++  }
++  if (Platform.OS === 'android' && isPushAvailable && Device.isDevice) {
++    const res = await Notifications.getDevicePushTokenAsync();
++    return res?.data ? { kind: 'fcm', token: String(res.data) } : null;
++  }
++  return null;
++}
++
++/**
++ * Registers the token that rings the phone natively for calls: PushKit VoIP (iOS) or the raw FCM token (Android).
++ * Independent of notification permission: VoIP pushes and FCM data messages are delivered without it.
++ */
++export async function registerCallToken(known = null) {
++  const deviceId = await getDeviceId();
++  CallUi.setConfig({ deviceId, declineUrl: DECLINE_URL });
++  if (!isNotificationServiceConfigured) return;
++
++  const native = known ?? (await getNativeCallToken());
++  if (!native?.token) return;
++
++  await notificationService.register({
++    token: native.token,
++    kind: native.kind,
++    platform: Platform.OS,
++    deviceId,
++    appVersion: Application.nativeApplicationVersion ?? '',
++  });
++}
+diff --git a/src/sockets/callSignaling.js b/src/sockets/callSignaling.js
+index 1636b63..4f9538b 100644
+--- a/src/sockets/callSignaling.js
++++ b/src/sockets/callSignaling.js
+@@ -1,5 +1,14 @@
+ // src/sockets/callSignaling.js
+ import { connectSocket, getSocket } from './socketManager';
++import { getDeviceId } from '../notifications/deviceId';
++
++// Sent with accept/reject/busy so the server stops the native ring on this user's OTHER devices only.
++let deviceId = null;
++getDeviceId()
++  .then((id) => {
++    deviceId = id;
++  })
++  .catch(() => {});
+ 
+ export const CALL_EVENTS = {
+   INVITE: 'call:invite',
+@@ -34,11 +43,11 @@ export function emitIceCandidate({ toEmail, callId, candidate }) {
+ }
+ 
+ export function emitAccept({ toEmail, callId }) {
+-  getSocket()?.emit(CALL_EVENTS.ACCEPT, { toEmail, callId });
++  getSocket()?.emit(CALL_EVENTS.ACCEPT, { toEmail, callId, deviceId });
+ }
+ 
+ export function emitReject({ toEmail, callId }) {
+-  getSocket()?.emit(CALL_EVENTS.REJECT, { toEmail, callId });
++  getSocket()?.emit(CALL_EVENTS.REJECT, { toEmail, callId, deviceId });
+ }
+ 
+ export function emitCancel({ toEmail, callId }) {
+@@ -50,7 +59,7 @@ export function emitEnd({ toEmail, callId }) {
+ }
+ 
+ export function emitBusy({ toEmail, callId }) {
+-  getSocket()?.emit(CALL_EVENTS.BUSY, { toEmail, callId });
++  getSocket()?.emit(CALL_EVENTS.BUSY, { toEmail, callId, deviceId });
+ }
+ 
+ async function connectedSocket(timeoutMs = 6000) {
+diff --git a/src/store/authStore.js b/src/store/authStore.js
+index 4356cf2..320bda9 100644
+--- a/src/store/authStore.js
++++ b/src/store/authStore.js
+@@ -1,4 +1,5 @@
+ import { create } from 'zustand';
++import { AppState } from 'react-native';
+ import { authService } from '../api/authService';
+ import { unregisterPushToken } from '../notifications/pushRegistration';
+ import { storage } from '../utils/storage';
+@@ -13,7 +14,10 @@ export const useAuthStore = create((set, get) => ({
+ 
+   hydrate: async () => {
+     try {
+-      const token = await storage.getItemAsync('auth_token');
++      if (AppState.currentState === 'active') {
++        await storage.migrateAccessibility(['auth_token', 'refresh_token', 'device_id', 'push_token']);
++      }
++      const token = await storage.getItemAsync('auth_token').catch(() => null);
+ 
+       if (!token) {
+         set({ user: null, isAuthenticated: false });
+diff --git a/src/utils/notificationsSafe.js b/src/utils/notificationsSafe.js
+index e693313..64f0532 100644
+--- a/src/utils/notificationsSafe.js
++++ b/src/utils/notificationsSafe.js
+@@ -18,6 +18,7 @@ const stub = {
+   requestPermissionsAsync: async () => ({ status: 'undetermined' }),
+   setNotificationChannelAsync: async () => {},
+   getExpoPushTokenAsync: async () => ({ data: null }),
++  getDevicePushTokenAsync: async () => ({ data: null }),
+   setBadgeCountAsync: async () => {},
+   addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
+   addNotificationReceivedListener: () => ({ remove: () => {} }),
+diff --git a/src/utils/storage.js b/src/utils/storage.js
+index 7ecb690..d0dace2 100644
+--- a/src/utils/storage.js
++++ b/src/utils/storage.js
+@@ -1,6 +1,11 @@
+ import * as SecureStore from 'expo-secure-store';
+ import { Platform } from 'react-native';
+ 
++// Readable after the first unlock since boot, so a call answered on the lock screen
++// (app launched in the background by a VoIP push) can still read the session.
++const NATIVE_OPTIONS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
++const MIGRATION_KEY = 'keychain_after_first_unlock_v1';
++
+ export const storage = {
+   getItemAsync: async (key) => {
+     if (Platform.OS === 'web') {
+@@ -10,7 +15,7 @@ export const storage = {
+         return null;
+       }
+     }
+-    return await SecureStore.getItemAsync(key);
++    return await SecureStore.getItemAsync(key, NATIVE_OPTIONS);
+   },
+ 
+   setItemAsync: async (key, value) => {
+@@ -23,7 +28,7 @@ export const storage = {
+       }
+       return;
+     }
+-    await SecureStore.setItemAsync(key, value);
++    await SecureStore.setItemAsync(key, value, NATIVE_OPTIONS);
+   },
+ 
+   deleteItemAsync: async (key) => {
+@@ -36,6 +41,26 @@ export const storage = {
+       }
+       return;
+     }
+-    await SecureStore.deleteItemAsync(key);
+-  }
+-};
+\ No newline at end of file
++    await SecureStore.deleteItemAsync(key, NATIVE_OPTIONS);
++  },
++
++  /**
++   * iOS keeps an item's original accessibility on update, so items written before AFTER_FIRST_UNLOCK
++   * must be deleted and written again. Run while the device is unlocked (app in the foreground).
++   */
++  migrateAccessibility: async (keys) => {
++    if (Platform.OS !== 'ios') return;
++    try {
++      if (await SecureStore.getItemAsync(MIGRATION_KEY, NATIVE_OPTIONS)) return;
++      for (const key of keys) {
++        const value = await SecureStore.getItemAsync(key);
++        if (value === null || value === undefined) continue;
++        await SecureStore.deleteItemAsync(key);
++        await SecureStore.setItemAsync(key, value, NATIVE_OPTIONS);
++      }
++      await SecureStore.setItemAsync(MIGRATION_KEY, '1', NATIVE_OPTIONS);
++    } catch {
++      // Device locked or keychain busy: retried on the next foreground start.
++    }
++  },
++};
+-- 
+2.43.0
+

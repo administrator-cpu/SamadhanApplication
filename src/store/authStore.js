@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { AppState } from 'react-native';
 import { authService } from '../api/authService';
 import { unregisterPushToken } from '../notifications/pushRegistration';
 import { storage } from '../utils/storage';
@@ -13,7 +14,10 @@ export const useAuthStore = create((set, get) => ({
 
   hydrate: async () => {
     try {
-      const token = await storage.getItemAsync('auth_token');
+      if (AppState.currentState === 'active') {
+        await storage.migrateAccessibility(['auth_token', 'refresh_token', 'device_id', 'push_token']);
+      }
+      const token = await storage.getItemAsync('auth_token').catch(() => null);
 
       if (!token) {
         set({ user: null, isAuthenticated: false });

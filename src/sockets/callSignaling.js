@@ -1,5 +1,14 @@
 // src/sockets/callSignaling.js
 import { connectSocket, getSocket } from './socketManager';
+import { getDeviceId } from '../notifications/deviceId';
+
+// Sent with accept/reject/busy so the server stops the native ring on this user's OTHER devices only.
+let deviceId = null;
+getDeviceId()
+  .then((id) => {
+    deviceId = id;
+  })
+  .catch(() => {});
 
 export const CALL_EVENTS = {
   INVITE: 'call:invite',
@@ -34,11 +43,11 @@ export function emitIceCandidate({ toEmail, callId, candidate }) {
 }
 
 export function emitAccept({ toEmail, callId }) {
-  getSocket()?.emit(CALL_EVENTS.ACCEPT, { toEmail, callId });
+  getSocket()?.emit(CALL_EVENTS.ACCEPT, { toEmail, callId, deviceId });
 }
 
 export function emitReject({ toEmail, callId }) {
-  getSocket()?.emit(CALL_EVENTS.REJECT, { toEmail, callId });
+  getSocket()?.emit(CALL_EVENTS.REJECT, { toEmail, callId, deviceId });
 }
 
 export function emitCancel({ toEmail, callId }) {
@@ -50,7 +59,7 @@ export function emitEnd({ toEmail, callId }) {
 }
 
 export function emitBusy({ toEmail, callId }) {
-  getSocket()?.emit(CALL_EVENTS.BUSY, { toEmail, callId });
+  getSocket()?.emit(CALL_EVENTS.BUSY, { toEmail, callId, deviceId });
 }
 
 async function connectedSocket(timeoutMs = 6000) {

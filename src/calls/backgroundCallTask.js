@@ -1,5 +1,6 @@
 // src/calls/backgroundCallTask.js
-// Loaded from index.js so it is defined when Android wakes the JS bundle headlessly for a data-only push.
+// Loaded from index.js so it is defined when Android wakes the JS bundle headlessly for a data-only push
+// (FCM direct from the Notification Service, or the legacy Expo push). iOS rings natively via PushKit/CallKit.
 import { AppState } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
 import Constants from 'expo-constants';
@@ -53,13 +54,15 @@ if (!TaskManager.isTaskDefined(CALL_PUSH_TASK)) {
 
     if (msg.type === 'call_invite') {
       if (AppState.currentState === 'active') return;
+      const expiresAt = Number(msg.expiresAt) || 0;
+      if (expiresAt && Date.now() >= expiresAt) return;
       CallUi.showIncomingCall({
         callId: msg.callId,
         callerName: msg.callerName,
         subtitle: callSubtitle(msg.ticketNumber),
         declineUrl: DECLINE_URL,
         declineToken: msg.declineToken ?? null,
-        timeoutMs: INCOMING_TIMEOUT_MS,
+        timeoutMs: expiresAt ? Math.min(INCOMING_TIMEOUT_MS, expiresAt - Date.now()) : INCOMING_TIMEOUT_MS,
       });
       return;
     }

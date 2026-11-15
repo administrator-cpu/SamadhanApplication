@@ -1,6 +1,8 @@
 // src/context/CallProvider.js
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
+import * as Device from 'expo-device';
+import { RTCAudioSession } from 'react-native-webrtc';
 import { useCall, CALL_STATUS, END_REASON } from '@/hooks/useCall';
 import IncomingCallModal from '@/components/calls/IncomingCallModal';
 import InCallScreen from '@/components/calls/InCallScreen';
@@ -9,6 +11,7 @@ import { callAudio } from '@/calls/callAudio';
 import { DEFAULT_TUNE } from '@/calls/ringbackTunes';
 import { DECLINE_URL, INCOMING_TIMEOUT_MS, callSubtitle } from '@/calls/backgroundCallTask';
 import { storage } from '@/utils/storage';
+import { getDeviceId } from '@/notifications/deviceId';
 import { useAuthStore } from '@/store/authStore';
 import { CallUi } from '../../modules/call-ui';
 
@@ -23,7 +26,24 @@ const END_MESSAGES = {
 };
 
 const FSI_PROMPT_KEY = 'call_fsi_prompted_v1';
+const BATTERY_PROMPT_KEY = 'call_battery_prompted_v1';
 const PENDING_ACTION_TTL_MS = 30000;
+const ACTIVE_STATUSES = [CALL_STATUS.RINGING_OUTGOING, CALL_STATUS.CONNECTING, CALL_STATUS.CONNECTED];
+// OEMs known to kill background apps: incoming calls need an explicit battery exemption there.
+const AGGRESSIVE_OEMS = ['xiaomi', 'redmi', 'poco', 'oppo', 'realme', 'oneplus', 'vivo', 'iqoo', 'samsung', 'huawei', 'honor', 'tecno', 'infinix', 'itel', 'motorola', 'asus', 'meizu', 'lenovo'];
+
+function isAggressiveOem() {
+  const maker = `${Device.manufacturer ?? ''} ${Device.brand ?? ''}`.toLowerCase();
+  return AGGRESSIVE_OEMS.some((m) => maker.includes(m));
+}
+
+function syncWebRtcAudio(active) {
+  if (Platform.OS !== 'ios') return;
+  try {
+    if (active) RTCAudioSession.audioSessionDidActivate();
+    else RTCAudioSession.audioSessionDidDeactivate();
+  } catch {}
+}
 
 function useAppActive() {
   const [active, setActive] = useState(AppState.currentState === 'active');
@@ -47,6 +67,13 @@ export function CallProvider({ children }) {
 
   const incoming = call.incomingCall;
   const showIncoming = call.status === CALL_STATUS.RINGING_INCOMING && !!incoming;
+
+  /* ── native call UI config (decline without JS, skip this device on cancel) ── */
+  useEffect(() => {
+    getDeviceId()
+      .then((deviceId) => CallUi.setConfig({ deviceId, declineUrl: DECLINE_URL }))
+      .catch(() => {});
+  }, []);
 
   /* ── signaling listeners follow the active socket ─────────── */
   useEffect(() => {
@@ -117,14 +144,55 @@ export function CallProvider({ children }) {
       return;
     }
     if (ringingIdRef.current) {
-      CallUi.dismissIncomingCall(ringingIdRef.current);
+      // Ended without being taken by the app (caller left, declined, stale): also end a call answered natively.
+      if (call.status === CALL_STATUS.IDLE) CallUi.endCall(ringingIdRef.current);
+      else CallUi.dismissIncomingCall(ringingIdRef.current);
       ringingIdRef.current = null;
     }
-  }, [showIncoming, incoming?.callId, appActive]);
+  }, [showIncoming, incoming?.callId, appActive, call.status]);
 
   useEffect(() => {
     if (call.status === CALL_STATUS.IDLE) CallUi.setShowWhenLocked(false);
   }, [call.status]);
+
+  /* ── native call state follows the app's call ─────────────── */
+  const nativeCallIdRef = useRef(null);
+  const inCall = ACTIVE_STATUSES.includes(call.status);
+
+  useEffect(() => {
+    if (inCall && call.activeCallId) {
+      nativeCallIdRef.current = call.activeCallId;
+      CallUi.setActiveCall(call.activeCallId);
+      return;
+    }
+    if (call.status === CALL_STATUS.IDLE) {
+      CallUi.setActiveCall(null);
+      CallUi.stopOngoingCall();
+      if (nativeCallIdRef.current) {
+        CallUi.endCall(nativeCallIdRef.current);
+        nativeCallIdRef.current = null;
+      }
+    }
+  }, [inCall, call.status, call.activeCallId]);
+
+  // Android: keep mic + audio alive in the background once the mic is actually open.
+  const hasLocalStream = !!call.localStream;
+  useEffect(() => {
+    const live = (call.status === CALL_STATUS.CONNECTING || call.status === CALL_STATUS.CONNECTED) && hasLocalStream;
+    if (live && call.activeCallId) CallUi.startOngoingCall({ callId: call.activeCallId, callerName: call.peerName });
+  }, [call.status, hasLocalStream, call.activeCallId, call.peerName]);
+
+  // iOS: mute button in the CallKit UI and in the app stay in step.
+  useEffect(() => {
+    if (inCall && call.activeCallId) CallUi.setMuted(call.activeCallId, call.isMuted);
+  }, [inCall, call.activeCallId, call.isMuted]);
+
+  // iOS: CallKit owns the audio session; WebRTC must be told when it is activated.
+  useEffect(() => {
+    if (CallUi.isAudioSessionActive()) syncWebRtcAudio(true);
+    const sub = CallUi.addAudioSessionListener(syncWebRtcAudio);
+    return () => sub.remove();
+  }, []);
 
   /* ── stale ringing: confirm with the server whenever the app wakes ── */
   useEffect(() => {
@@ -157,28 +225,59 @@ export function CallProvider({ children }) {
     }
   }, [call.acceptCall]);
 
-  /* ── actions from the native call notification ─────────────── */
+  /* ── actions from the native call UI (notification / CallKit) ── */
+  const callRef = useRef(call);
+  callRef.current = call;
+
   const handleNativeAction = useCallback((evt) => {
     if (!evt?.callId || !evt?.action) return;
-    setPendingAction({ action: evt.action, callId: String(evt.callId), at: Date.now() });
+    const callId = String(evt.callId);
+    const at = Number(evt.at) || Date.now();
+    if (Date.now() - at > PENDING_ACTION_TTL_MS) return;
+    const current = callRef.current;
+    const isCurrent = current.activeCallId === callId;
+
+    if (evt.action === 'mute') {
+      if (isCurrent) current.setMuted(!!evt.muted);
+      return;
+    }
+    if (evt.action === 'end') {
+      setPendingAction((prev) => (prev?.callId === callId ? null : prev));
+      if (isCurrent) current.endCall();
+      else if (current.incomingCall?.callId === callId) current.rejectCall();
+      return;
+    }
+    setPendingAction({ action: evt.action, callId, at });
     connectSocket();
   }, []);
 
-  useEffect(() => {
-    const sub = CallUi.addActionListener(handleNativeAction);
-    handleNativeAction(CallUi.consumeLaunchAction());
-    return () => sub.remove();
+  const drainNativeActions = useCallback(() => {
+    for (const evt of CallUi.consumePendingActions()) handleNativeAction(evt);
   }, [handleNativeAction]);
 
   useEffect(() => {
-    if (appActive) handleNativeAction(CallUi.consumeLaunchAction());
-  }, [appActive, handleNativeAction]);
+    const sub = CallUi.addActionListener(handleNativeAction);
+    drainNativeActions();
+    return () => sub.remove();
+  }, [handleNativeAction, drainNativeActions]);
+
+  useEffect(() => {
+    if (appActive) drainNativeActions();
+  }, [appActive, drainNativeActions]);
 
   useEffect(() => {
     if (!pendingAction) return undefined;
+    const expire = () => {
+      setPendingAction(null);
+      if (pendingAction.action === 'answer' && callRef.current.activeCallId !== pendingAction.callId) {
+        // Answered on the lock screen but the invite never arrived (offline, or the caller already left).
+        CallUi.endCall(pendingAction.callId);
+        Alert.alert('Call ended', "Couldn't connect the call. Check your connection and call back.");
+      }
+    };
     const left = PENDING_ACTION_TTL_MS - (Date.now() - pendingAction.at);
     if (left <= 0) {
-      setPendingAction(null);
+      expire();
       return undefined;
     }
     if (showIncoming && incoming.callId === pendingAction.callId) {
@@ -195,7 +294,7 @@ export function CallProvider({ children }) {
       }
       return undefined;
     }
-    const t = setTimeout(() => setPendingAction(null), left);
+    const t = setTimeout(expire, left);
     return () => clearTimeout(t);
   }, [pendingAction, showIncoming, incoming?.callId, incoming?.offerSdp, call.rejectCall, handleAccept]);
 
@@ -213,6 +312,29 @@ export function CallProvider({ children }) {
         [
           { text: 'Not now', style: 'cancel' },
           { text: 'Allow', onPress: () => CallUi.openFullScreenIntentSettings() },
+        ]
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  /* ── one-time battery exemption on OEMs that kill background apps ── */
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isAuthenticated || !CallUi.isAvailable) return;
+    if (!isAggressiveOem() || CallUi.isIgnoringBatteryOptimizations()) return;
+    let cancelled = false;
+    (async () => {
+      const asked = await storage.getItemAsync(BATTERY_PROMPT_KEY).catch(() => null);
+      if (asked || cancelled) return;
+      await storage.setItemAsync(BATTERY_PROMPT_KEY, '1').catch(() => {});
+      Alert.alert(
+        "Don't miss calls",
+        'Your phone may stop Samadhan in the background, so calls would not ring. Allow Samadhan to run in the background (set battery to "Unrestricted" and turn on Autostart if your phone has it).',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open settings', onPress: () => CallUi.openBatteryOptimizationSettings() },
         ]
       );
     })();

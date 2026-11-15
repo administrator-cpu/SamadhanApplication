@@ -8,10 +8,11 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { queryClient } from '../api/queryClient';
 import { notificationService, isNotificationServiceConfigured } from '../api/notificationService';
-import { registerPushToken } from '../notifications/pushRegistration';
+import { registerCallToken, registerPushToken } from '../notifications/pushRegistration';
+import { CallUi } from '../../modules/call-ui';
 import { CHANNELS } from '../notifications/channels';
 
-const SILENT_IN_FOREGROUND = new Set(['call_invite']);
+const SILENT_IN_FOREGROUND = new Set(['call_invite', 'call_cancel']);
 const REREGISTER_AFTER_MS = 6 * 60 * 60 * 1000;
 
 const ROLE_PATHS = {
@@ -101,6 +102,22 @@ async function registerWithRetry(isCancelled) {
   }
 }
 
+async function registerCallTokenWithRetry(isCancelled, known = null) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (isCancelled()) return;
+      await registerCallToken(known);
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+    }
+  }
+}
+
+function registerAll(isCancelled) {
+  return Promise.all([registerWithRetry(isCancelled), registerCallTokenWithRetry(isCancelled)]);
+}
+
 function refreshAfterNotification(data) {
   queryClient.invalidateQueries({ queryKey: ['tickets'] });
   if (data?.ticketId) {
@@ -125,7 +142,7 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
-    registerWithRetry(() => cancelled).then(() => {
+    registerAll(() => cancelled).then(() => {
       lastRegisteredAt.current = Date.now();
     });
     return () => {
@@ -137,9 +154,18 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!isAuthenticated || !isPushAvailable || typeof Notifications.addPushTokenListener !== 'function') return;
     const sub = Notifications.addPushTokenListener(() => {
-      registerWithRetry(() => false);
+      registerAll(() => false);
     });
     return () => sub?.remove?.();
+  }, [isAuthenticated]);
+
+  // PushKit hands out / rotates the VoIP token on its own schedule (iOS).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const sub = CallUi.addVoipTokenListener((token) => {
+      if (token) registerCallTokenWithRetry(() => false, { kind: 'apns_voip', token });
+    });
+    return () => sub.remove();
   }, [isAuthenticated]);
 
   // Re-register after long background periods so "last seen" stays fresh and dead rows self-heal.
@@ -149,7 +175,7 @@ export function usePushNotifications() {
       if (state !== 'active') return;
       if (Date.now() - lastRegisteredAt.current < REREGISTER_AFTER_MS) return;
       lastRegisteredAt.current = Date.now();
-      registerWithRetry(() => false);
+      registerAll(() => false);
     });
     return () => sub.remove();
   }, [isAuthenticated]);
