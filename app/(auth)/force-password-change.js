@@ -16,7 +16,7 @@ import { useAuthStore } from '../../src/store/authStore';
 
 export default function ForcePasswordChangeScreen() {
   const user = useAuthStore((state) => state.user);
-  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const logout = useAuthStore((state) => state.logout);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -45,9 +45,9 @@ const handleSubmit = async () => {
 
   try {
     await authService.changePassword(undefined, newPassword);
-    await clearAuth();
+    await logout();
   } catch (error) {
-    await clearAuth();
+    await logout();
     setErrorMessage('Password updated. Please log in with your new password.');
   } finally {
     setIsSubmitting(false);

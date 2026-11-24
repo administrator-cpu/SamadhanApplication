@@ -84,6 +84,10 @@ export default ({ config }) => {
             extraProguardRules: [
               "-keep class org.webrtc.** { *; }",
               "-dontwarn org.webrtc.**",
+              // expo-task-manager loads these by reflection to boot JS headlessly for a call push when the app process is dead.
+              "-keep class expo.modules.adapters.react.apploader.** { *; }",
+              "-keep class expo.modules.taskManager.** { *; }",
+              "-keep class expo.modules.notifications.notifications.background.** { *; }",
             ].join("\n"),
           },
         },

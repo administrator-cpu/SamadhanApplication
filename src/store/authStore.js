@@ -56,7 +56,7 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     try {
       await unregisterPushToken().catch(() => {});
-      await authService.logout();
+      await authService.logout().catch(() => {});
     } finally {
       await notificationsSafe.setBadgeCountAsync(0).catch(() => {});
       queryClient.clear();

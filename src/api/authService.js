@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { storage } from '../utils/storage';
 
 export const authService = {
   login: async (email, password) => {
@@ -12,7 +13,8 @@ export const authService = {
   },
 
   logout: async () => {
-    const { data } = await apiClient.post('/logout');
+    const refreshToken = await storage.getItemAsync('refresh_token').catch(() => null);
+    const { data } = await apiClient.post('/logout', refreshToken ? { refreshToken } : {});
     return data;
   },
 
